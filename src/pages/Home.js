@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import API from '../api';
 
 export default function Home() {
   const navigate = useNavigate();
@@ -27,9 +27,9 @@ export default function Home() {
     try {
       setLoading(true);
       const [restRes, orderRes, bannerRes] = await Promise.all([
-        axios.get('/api/restaurants'),
-        axios.get('/api/my-orders', { headers: { Authorization: `Bearer ${token}` } }),
-        axios.get('/api/banners'),
+        API.get('/api/restaurants'),
+        API.get('/api/my-orders', { headers: { Authorization: `Bearer ${token}` } }),
+        API.get('/api/banners'),
       ]);
 
       const rests = restRes.data;
@@ -44,7 +44,7 @@ export default function Home() {
       const allItems = [];
       for (const r of rests) {
         try {
-          const menuRes = await axios.get(`/api/menu/${r.id}`);
+          const menuRes = await API.get(`/api/menu/${r.id}`);
           menuRes.data.forEach(item => allItems.push({
             ...item,
             restaurant_name: r.name,
@@ -461,7 +461,6 @@ const s = {
   vegSwitch: { width: '32px', height: '18px', borderRadius: '9px', position: 'relative', transition: '0.3s' },
   vegDot: { position: 'absolute', width: '14px', height: '14px', background: 'white', borderRadius: '50%', top: '2px', transition: '0.3s' },
 
-  // Search Results
   searchResults: { background: '#f7f7f7', minHeight: '100vh', padding: '15px 16px' },
   searchResultsHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' },
   searchResultsTitle: { fontSize: '14px', fontWeight: '700', color: '#222' },

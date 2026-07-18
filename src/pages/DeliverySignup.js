@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import API from '../api';
 
 export default function DeliverySignup() {
   const navigate = useNavigate();
@@ -23,7 +23,7 @@ export default function DeliverySignup() {
       return;
     }
     try {
-      await axios.post('/api/apply', form);
+      await API.post('/api/apply', form);
       setSubmitted(true);
     } catch (e) {
       setError('Server error! Please try again.');

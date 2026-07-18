@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import API from '../api';
 
 export default function Track() {
   const navigate = useNavigate();
@@ -20,7 +20,7 @@ export default function Track() {
   const loadOrders = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get('/api/my-orders', {
+      const res = await API.get('/api/my-orders', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setOrders(res.data);
@@ -32,7 +32,7 @@ export default function Track() {
     if (!rating) { alert('Please select a rating!'); return; }
     try {
       const token = localStorage.getItem('token');
-      await axios.post('/api/rating', {
+      await API.post('/api/rating', {
         restaurant_id: ratingModal.restaurant_id,
         order_id: ratingModal.id,
         rating, review

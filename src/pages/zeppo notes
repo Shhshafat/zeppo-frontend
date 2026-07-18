@@ -115,3 +115,18 @@ This chat has 82 of 100 images (including PDF pages). Consider starting a new ch
 - Home page banners API se load karna
 - Live deploy
 - PWA/Playstore
+## Latest Update 18-07-2026:
+- Frontend live: https://golden-melomakarona-e661d3.netlify.app
+- Backend live: https://zeppo-backend.onrender.com
+- api.js banaya — production/development auto detect
+
+## Abhi karna baaki hai:
+- Saari files mein axios → API replace karna hai
+- Login.js, Signup.js, Home.js, Order.js, Track.js, Admin.js, DeliverySignup.js, Stores.js
+- import axios from 'axios' → import API from '../api'
+- axios. → API.
+- Phir git push → Netlify auto deploy
+
+## Ports local:
+- Backend: localhost:3001
+- Frontend: localhost:3000

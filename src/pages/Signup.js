@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import axios from 'axios';
+import API from '../api';
 
 export default function Signup() {
   const [form, setForm] = useState({ name: '', email: '', phone: '', password: '' });
@@ -15,7 +15,7 @@ export default function Signup() {
     }
     setLoading(true);
     try {
-      const res = await axios.post('/api/register', form);
+      const res = await API.post('/api/register', form);
       if (res.data.success) {
         setSuccess('Account created! Redirecting...');
         setTimeout(() => navigate('/login'), 1500);

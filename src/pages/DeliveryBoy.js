@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import API from '../api';
 
 export default function DeliveryBoy() {
   const navigate = useNavigate();
@@ -14,13 +14,13 @@ export default function DeliveryBoy() {
   }, []);
 
   const loadOrders = async () => {
-    const res = await axios.get('/api/delivery-orders');
+    const res = await API.get('/api/delivery-orders');
     setOrders(res.data);
     setDelivered(res.data.filter(o => o.status === 'delivered').length);
   };
 
   const updateStatus = async (id, status) => {
-    await axios.post('/api/orders/status', { id, status });
+    await API.post('/api/orders/status', { id, status });
     loadOrders();
   };
 

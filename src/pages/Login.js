@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import axios from 'axios';
+import API from '../api';
 
 export default function Login() {
   const [showSplash, setShowSplash] = useState(true);
@@ -18,7 +18,7 @@ export default function Login() {
     if (!email || !password) { setError('Please fill all fields!'); return; }
     setLoading(true);
     try {
-      const res = await axios.post('/api/login', { email, password });
+      const res = await API.post('/api/login', { email, password });
       if (res.data.success) {
         localStorage.setItem('token', res.data.token);
         localStorage.setItem('name', res.data.name);

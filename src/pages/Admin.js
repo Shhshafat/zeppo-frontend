@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import API from '../api';
 
 export default function Admin() {
   const navigate = useNavigate();
@@ -21,15 +21,15 @@ export default function Admin() {
 
   const loadAll = async () => {
     const [orders, rests, users, apps, dboys, notifs, banners, coupons, analytics] = await Promise.all([
-      axios.get('/api/orders'),
-      axios.get('/api/restaurants'),
-      axios.get('/api/users'),
-      axios.get('/api/applications'),
-      axios.get('/api/delivery-boys/stats'),
-      axios.get('/api/notifications'),
-      axios.get('/api/banners'),
-      axios.get('/api/coupons'),
-      axios.get('/api/analytics'),
+      API.get('/api/orders'),
+      API.get('/api/restaurants'),
+      API.get('/api/users'),
+      API.get('/api/applications'),
+      API.get('/api/delivery-boys/stats'),
+      API.get('/api/notifications'),
+      API.get('/api/banners'),
+      API.get('/api/coupons'),
+      API.get('/api/analytics'),
     ]);
     setData({ orders: orders.data, restaurants: rests.data, users: users.data, applications: apps.data, deliveryBoys: dboys.data, notifications: notifs.data, banners: banners.data, coupons: coupons.data, analytics: analytics.data });
     setUnread(notifs.data.filter(n => !n.is_read).length);
@@ -42,7 +42,7 @@ export default function Admin() {
   const uploadImage = async (file, type) => {
     const fd = new FormData();
     fd.append('image', file);
-    const res = await axios.post(`/api/upload/${type}`, fd);
+    const res = await API.post(`/api/upload/${type}`, fd);
     return res.data.url;
   };
 
@@ -50,7 +50,7 @@ export default function Admin() {
     if (!restForm.name || !restForm.category || !restForm.address) { alert('Fill all fields!'); return; }
     let image = restForm.image;
     if (restImgRef.current?.files[0]) image = await uploadImage(restImgRef.current.files[0], 'restaurant');
-    await axios.post('/api/restaurants/add', { ...restForm, image });
+    await API.post('/api/restaurants/add', { ...restForm, image });
     setRestForm({ name: '', category: '', emoji: '🍽️', address: '', description: '', image: '' });
     if (restImgRef.current) restImgRef.current.value = '';
     alert('✅ Restaurant added!');
@@ -61,14 +61,14 @@ export default function Admin() {
     if (!editRest) return;
     let image = editRest.image;
     if (restImgRef.current?.files[0]) image = await uploadImage(restImgRef.current.files[0], 'restaurant');
-    await axios.post('/api/restaurants/update', { ...editRest, image });
+    await API.post('/api/restaurants/update', { ...editRest, image });
     setEditRest(null);
     alert('✅ Restaurant updated!');
     loadAll();
   };
 
   const toggleRestaurant = async (id, is_open) => {
-    await axios.post('/api/restaurants/toggle', { id, is_open: is_open ? 0 : 1 });
+    await API.post('/api/restaurants/toggle', { id, is_open: is_open ? 0 : 1 });
     loadAll();
   };
 
@@ -76,7 +76,7 @@ export default function Admin() {
     if (!menuForm.restaurant_id || !menuForm.name || !menuForm.price) { alert('Fill all fields!'); return; }
     let image = menuForm.image;
     if (foodImgRef.current?.files[0]) image = await uploadImage(foodImgRef.current.files[0], 'food');
-    await axios.post('/api/menu/add', { ...menuForm, price: parseInt(menuForm.price), image });
+    await API.post('/api/menu/add', { ...menuForm, price: parseInt(menuForm.price), image });
     setMenuForm(f => ({ ...f, category: '', name: '', price: '', description: '', image: '' }));
     if (foodImgRef.current) foodImgRef.current.value = '';
     alert('✅ Item added!');
@@ -84,7 +84,7 @@ export default function Admin() {
   };
 
   const markNotifRead = async () => {
-    await axios.post('/api/notifications/read');
+    await API.post('/api/notifications/read');
     setUnread(0);
     loadAll();
   };
@@ -230,10 +230,10 @@ export default function Admin() {
                       <td style={s.td}>{o.payment_method === 'upi' ? '💳' : '💵'}</td>
                       <td style={s.td}><span style={{ ...s.badge2, ...getBadge(o.status) }}>{o.status}</span></td>
                       <td style={s.td}>
-                        {o.status === 'pending' && <button style={s.btnConfirm} onClick={() => { axios.post('/api/orders/status', { id: o.id, status: 'confirmed' }); loadAll(); }}>Confirm</button>}
-                        {o.status === 'confirmed' && <button style={s.btnPurple} onClick={() => { axios.post('/api/orders/status', { id: o.id, status: 'preparing' }); loadAll(); }}>Preparing</button>}
-                        {o.status === 'preparing' && <button style={s.btnBlue} onClick={() => { axios.post('/api/orders/status', { id: o.id, status: 'on_the_way' }); loadAll(); }}>On Way</button>}
-                        {o.status === 'on_the_way' && <button style={s.btnGreen} onClick={() => { axios.post('/api/orders/status', { id: o.id, status: 'delivered' }); loadAll(); }}>Delivered</button>}
+                        {o.status === 'pending' && <button style={s.btnConfirm} onClick={() => { API.post('/api/orders/status', { id: o.id, status: 'confirmed' }); loadAll(); }}>Confirm</button>}
+                        {o.status === 'confirmed' && <button style={s.btnPurple} onClick={() => { API.post('/api/orders/status', { id: o.id, status: 'preparing' }); loadAll(); }}>Preparing</button>}
+                        {o.status === 'preparing' && <button style={s.btnBlue} onClick={() => { API.post('/api/orders/status', { id: o.id, status: 'on_the_way' }); loadAll(); }}>On Way</button>}
+                        {o.status === 'on_the_way' && <button style={s.btnGreen} onClick={() => { API.post('/api/orders/status', { id: o.id, status: 'delivered' }); loadAll(); }}>Delivered</button>}
                       </td>
                     </tr>
                   ))}
@@ -304,7 +304,7 @@ export default function Admin() {
                           <button style={{ ...s.btnConfirm, background: r.is_open ? '#f8d7da' : '#d1e7dd', color: r.is_open ? '#842029' : '#0a3622', marginLeft: '5px' }} onClick={() => toggleRestaurant(r.id, r.is_open)}>
                             {r.is_open ? 'Close' : 'Open'}
                           </button>
-                          <button style={{ ...s.btnRed, marginLeft: '5px' }} onClick={() => { if (window.confirm('Delete?')) { axios.post('/api/restaurants/delete', { id: r.id }); loadAll(); } }}>Del</button>
+                          <button style={{ ...s.btnRed, marginLeft: '5px' }} onClick={() => { if (window.confirm('Delete?')) { API.post('/api/restaurants/delete', { id: r.id }); loadAll(); } }}>Del</button>
                         </td>
                       </tr>
                     ))}
@@ -334,14 +334,8 @@ export default function Admin() {
                 <button style={s.btnOrange} onClick={addMenuItem}>➕ Add Item</button>
               </div>
 
-              {data.restaurants.map(r => {
-                const items = data.orders; // placeholder
-                return null;
-              })}
-
               <div style={s.tableCard}>
                 <h3 style={s.tableTitle}>🍽️ Menu by Restaurant</h3>
-
                 <MenuTable restaurants={data.restaurants} reload={loadAll} />
               </div>
             </div>
@@ -358,7 +352,7 @@ export default function Admin() {
                   <input style={s.input} placeholder="Salary per delivery (₹)" type="number" value={dboyForm.salary_per_delivery} onChange={e => setDboyForm({ ...dboyForm, salary_per_delivery: e.target.value })} />
                 </div>
                 <button style={s.btnOrange} onClick={async () => {
-                  await axios.post('/api/delivery-boys/add', dboyForm);
+                  await API.post('/api/delivery-boys/add', dboyForm);
                   setDboyForm({ name: '', phone: '', salary_per_delivery: 50 });
                   loadAll();
                 }}>➕ Add Delivery Boy</button>
@@ -378,11 +372,11 @@ export default function Admin() {
                             type="number"
                             defaultValue={d.salary_per_delivery}
                             style={{ ...s.input, width: '80px', padding: '5px', marginBottom: 0 }}
-                            onBlur={e => axios.post('/api/delivery-boys/salary', { id: d.id, salary_per_delivery: e.target.value })}
+                            onBlur={e => API.post('/api/delivery-boys/salary', { id: d.id, salary_per_delivery: e.target.value })}
                           />
                         </td>
                         <td style={s.td}>{d.total_deliveries}</td>
-                        <td style={s.td} style={{ color: '#27ae60', fontWeight: '700' }}>₹{d.total_earned}</td>
+                        <td style={{ ...s.td, color: '#27ae60', fontWeight: '700' }}>₹{d.total_earned}</td>
                         <td style={s.td}><span style={{ ...s.badge2, background: '#d1e7dd', color: '#0a3622' }}>Active</span></td>
                       </tr>
                     ))}
@@ -410,8 +404,8 @@ export default function Admin() {
                       <td style={s.td}>{a.education}</td>
                       <td style={s.td}><span style={{ ...s.badge2, ...getBadge(a.status) }}>{a.status}</span></td>
                       <td style={s.td}>
-                        <button style={s.btnGreen} onClick={() => { axios.post('/api/application/status', { id: a.id, status: 'approved' }); loadAll(); }}>✅</button>
-                        <button style={{ ...s.btnRed, marginLeft: '5px' }} onClick={() => { axios.post('/api/application/status', { id: a.id, status: 'rejected' }); loadAll(); }}>❌</button>
+                        <button style={s.btnGreen} onClick={() => { API.post('/api/application/status', { id: a.id, status: 'approved' }); loadAll(); }}>✅</button>
+                        <button style={{ ...s.btnRed, marginLeft: '5px' }} onClick={() => { API.post('/api/application/status', { id: a.id, status: 'rejected' }); loadAll(); }}>❌</button>
                       </td>
                     </tr>
                   ))}
@@ -429,7 +423,7 @@ export default function Admin() {
                 <input style={s.input} placeholder="Subtitle" value={bannerForm.subtitle} onChange={e => setBannerForm({ ...bannerForm, subtitle: e.target.value })} />
                 <input style={s.input} placeholder="Button Text" value={bannerForm.button_text} onChange={e => setBannerForm({ ...bannerForm, button_text: e.target.value })} />
                 <button style={s.btnOrange} onClick={async () => {
-                  await axios.post('/api/banners/add', bannerForm);
+                  await API.post('/api/banners/add', bannerForm);
                   setBannerForm({ title: '', subtitle: '', button_text: 'Order Now' });
                   loadAll();
                 }}>➕ Add Banner</button>
@@ -443,7 +437,7 @@ export default function Admin() {
                       <div style={{ fontSize: '13px', opacity: '0.8' }}>{b.subtitle}</div>
                       <div style={{ background: '#ff6b00', padding: '5px 15px', borderRadius: '20px', fontSize: '12px', display: 'inline-block', marginTop: '8px' }}>{b.button_text}</div>
                     </div>
-                    <button style={s.btnRed} onClick={() => { axios.post('/api/banners/delete', { id: b.id }); loadAll(); }}>Delete</button>
+                    <button style={s.btnRed} onClick={() => { API.post('/api/banners/delete', { id: b.id }); loadAll(); }}>Delete</button>
                   </div>
                 ))}
               </div>
@@ -465,7 +459,7 @@ export default function Admin() {
                   <input style={s.input} placeholder="Min Order (₹)" type="number" value={couponForm.min_order} onChange={e => setCouponForm({ ...couponForm, min_order: e.target.value })} />
                 </div>
                 <button style={s.btnOrange} onClick={async () => {
-                  await axios.post('/api/coupons/add', couponForm);
+                  await API.post('/api/coupons/add', couponForm);
                   setCouponForm({ code: '', discount: '', type: 'flat', min_order: 0 });
                   loadAll();
                 }}>➕ Add Coupon</button>
@@ -481,7 +475,7 @@ export default function Admin() {
                         <td style={s.td}>{c.type === 'percent' ? c.discount + '%' : '₹' + c.discount}</td>
                         <td style={s.td}>{c.type}</td>
                         <td style={s.td}>₹{c.min_order}</td>
-                        <td style={s.td}><button style={s.btnRed} onClick={() => { axios.post('/api/coupons/delete', { id: c.id }); loadAll(); }}>Delete</button></td>
+                        <td style={s.td}><button style={s.btnRed} onClick={() => { API.post('/api/coupons/delete', { id: c.id }); loadAll(); }}>Delete</button></td>
                       </tr>
                     ))}
                   </tbody>
@@ -524,7 +518,7 @@ function MenuTable({ restaurants, reload }) {
 
   useEffect(() => {
     restaurants.forEach(async r => {
-      const res = await axios.get(`/api/menu/${r.id}`);
+      const res = await API.get(`/api/menu/${r.id}`);
       setMenuData(prev => ({ ...prev, [r.id]: res.data }));
     });
   }, [restaurants]);
@@ -552,7 +546,7 @@ function MenuTable({ restaurants, reload }) {
                     <td style={{ padding: '8px', fontSize: '13px', color: '#ff6b00', fontWeight: '700' }}>₹{item.price}</td>
                     <td style={{ padding: '8px' }}>
                       <button style={{ background: '#f8d7da', color: '#842029', border: 'none', padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }}
-                        onClick={() => { axios.post('/api/menu/delete', { id: item.id }); reload(); }}>Delete</button>
+                        onClick={() => { API.post('/api/menu/delete', { id: item.id }); reload(); }}>Delete</button>
                     </td>
                   </tr>
                 ))}

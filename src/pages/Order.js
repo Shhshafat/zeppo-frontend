@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import axios from 'axios';
+import API from '../api';
 
 export default function Order() {
   const { id } = useParams();
@@ -24,17 +24,17 @@ export default function Order() {
 
   const loadData = async () => {
     try {
-      const restRes = await axios.get('/api/restaurants');
+      const restRes = await API.get('/api/restaurants');
       const rest = restRes.data.find(r => r.id == id);
       setRestaurant(rest);
-      const menuRes = await axios.get(`/api/menu/${id}`);
+      const menuRes = await API.get(`/api/menu/${id}`);
       const cats = {};
       menuRes.data.forEach(item => {
         if (!cats[item.category]) cats[item.category] = [];
         cats[item.category].push(item);
       });
       setCategories(cats);
-      const ratingsRes = await axios.get(`/api/ratings/${id}`);
+      const ratingsRes = await API.get(`/api/ratings/${id}`);
       setRatings(ratingsRes.data);
     } catch(e) { console.error(e); }
   };
@@ -48,7 +48,7 @@ export default function Order() {
   const applyCoupon = async () => {
     if (!couponCode.trim()) { setCouponMsg('Please enter a coupon code!'); return; }
     try {
-      const res = await axios.post('/api/coupons/verify', { code: couponCode.toUpperCase(), total: subtotal });
+      const res = await API.post('/api/coupons/verify', { code: couponCode.toUpperCase(), total: subtotal });
       if (res.data.success) {
         setCouponDiscount(res.data.discount);
         setCouponApplied(true);
@@ -75,7 +75,7 @@ export default function Order() {
     if (cart.length === 0) { alert('Please add items to cart!'); return; }
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.post('/api/order', {
+      const res = await API.post('/api/order', {
         customer_name: name, customer_phone: phone,
         customer_address: address, restaurant_id: id,
         restaurant_name: restaurant?.name, items: cart,

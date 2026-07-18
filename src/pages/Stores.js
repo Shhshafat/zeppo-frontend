@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import API from '../api';
 
 export default function Stores() {
   const navigate = useNavigate();
@@ -17,14 +17,14 @@ export default function Stores() {
 
   const loadData = async () => {
     try {
-      const res = await axios.get('/api/restaurants');
+      const res = await API.get('/api/restaurants');
       setRestaurants(res.data);
       setFiltered(res.data);
 
       const allItems = [];
       for (const r of res.data) {
         try {
-          const menuRes = await axios.get(`/api/menu/${r.id}`);
+          const menuRes = await API.get(`/api/menu/${r.id}`);
           menuRes.data.forEach(item => allItems.push({
             ...item,
             restaurant_name: r.name,
