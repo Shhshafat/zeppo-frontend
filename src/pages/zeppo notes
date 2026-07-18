@@ -1,0 +1,117 @@
+# ZEPPO Project Notes
+
+## Project:
+- Naam: ZEPPO
+- Tagline: Ghar tak, jhatpat!
+- Folder Backend: C:\Users\HP\kupwara-delivery
+- Folder Frontend: C:\Users\HP\zeppo-app
+- Admin: admin@zeppo.com / zeppo123
+- Delivery Test: delivery@zeppo.com / delivery123
+
+## Start karne ka tarika:
+- Terminal 1: cd C:\Users\HP\kupwara-delivery → node server.js
+- Terminal 2: cd C:\Users\HP\zeppo-app → npm start
+- Backend: http://localhost:3000
+- Frontend: http://localhost:3001
+
+## Jo ban gaya:
+- Login.js ✅
+- Signup.js ✅
+- Home.js ✅ Swiggy style
+- Order.js ✅ Menu categories + cart
+- Track.js ✅ 5 step tracking
+- Admin.js ✅ Full panel — sidebar, stats, orders, restaurants, menu, applications, users
+- DeliveryBoy.js ✅ Delivery dashboard
+
+## Backend APIs:
+- POST /api/login
+- POST /api/register
+- GET /api/restaurants
+- POST /api/restaurants/add
+- POST /api/restaurants/delete
+- GET /api/menu/:id
+- POST /api/menu/add
+- POST /api/menu/delete
+- POST /api/order
+- GET /api/orders
+- GET /api/my-orders
+- POST /api/orders/status
+- GET /api/applications
+- POST /api/apply
+- POST /api/application/status
+- GET /api/users
+- GET /api/delivery-orders
+
+## Abhi baaki hai:
+- PWA setup — app install hone ke liye
+- Real server deploy — Railway/Render
+- Playstore pe dalna
+- Payment system
+- Email OTP
+## Latest Update 14-07-2026:
+- Profile.js banaya — Zomato jaisa
+- App.js mein Profile route add kiya
+- Home.js mein Profile button fix kiya
+
+## Abhi baaki hai:
+- DeliverySignup.js React mein
+- Location change feature
+- Payment system
+- Live deploy
+- Playstore
+## Latest Update 15-07-2026:
+- Login.js — FoodCort style, splash screen
+- Signup.js — Getting started style
+- Profile.js — Zomato jaisa, sab buttons kaam karte hain
+- Location.js — Kupwara ke areas
+- App.js — Location route add kiya
+
+## Kal karna hai:
+- Kupwara ki sab locations add karni hain
+- Live delivery tracking
+- Home page improve
+- Dark mode fix
+## Latest Update 16-07-2026:
+- Login.js — Splash screen + FoodCort style
+- Signup.js — Getting started style
+- Profile.js — Zomato jaisa, dark mode support
+- Location.js — 367 Kupwara villages
+- Home.js — Swiggy jaisa improved
+- DeliverySignup.js — 3 step form with document upload
+- App.js — Dark mode context, all routes added
+
+## Abhi baaki hai:
+- Live deploy — Railway/Render
+- Payment system
+- Real-time notifications
+- Playstore PWA
+This chat has 82 of 100 images (including PDF pages). Consider starting a new chat.
+## Latest Update 16-07-2026:
+- Admin panel complete — CMS system
+- Restaurant add/edit/delete with image upload
+- Menu add with food photos
+- Delivery boys salary system
+- Banners management
+- Coupons system
+- Notifications with bell icon
+- Analytics dashboard
+- Database fixed — all new columns added
+
+## Ports:
+- Backend: localhost:3001
+- Frontend: localhost:3000
+
+## Start karne ka tarika:
+- Terminal 1: cd C:\Users\HP\kupwara-delivery → node server.js
+- Terminal 2: cd C:\Users\HP\zeppo-app → npm start
+- Browser: http://localhost:3000
+
+## Admin:
+- Email: admin@zeppo.com
+- Pass: zeppo123
+
+## Abhi baaki hai:
+- Coupon apply in order page
+- Home page banners API se load karna
+- Live deploy
+- PWA/Playstore
