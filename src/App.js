@@ -11,32 +11,28 @@ import Profile from './pages/Profile';
 import Location from './pages/Location';
 import DeliverySignup from './pages/DeliverySignup';
 import Stores from './pages/Stores';
-
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 export const ThemeContext = createContext();
 export const useTheme = () => useContext(ThemeContext);
-
 const PrivateRoute = ({ children }) => {
   const token = localStorage.getItem('token');
   return token ? children : <Navigate to="/login" />;
 };
-
 const AdminRoute = ({ children }) => {
   const token = localStorage.getItem('token');
   const role = localStorage.getItem('role');
   return token && role === 'admin' ? children : <Navigate to="/" />;
 };
-
 function App() {
   const [darkMode, setDarkMode] = useState(
     localStorage.getItem('darkMode') === 'true'
   );
-
   const toggleDark = () => {
     const newVal = !darkMode;
     setDarkMode(newVal);
     localStorage.setItem('darkMode', newVal);
   };
-
   return (
     <ThemeContext.Provider value={{ darkMode, toggleDark }}>
       <div style={{ background: darkMode ? '#121212' : '#f7f7f7', minHeight: '100vh' }}>
@@ -44,6 +40,8 @@ function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password/:token" element={<ResetPassword />} />
             <Route path="/" element={<PrivateRoute><Home /></PrivateRoute>} />
             <Route path="/order/:id" element={<PrivateRoute><Order /></PrivateRoute>} />
             <Route path="/track" element={<PrivateRoute><Track /></PrivateRoute>} />
@@ -59,5 +57,4 @@ function App() {
     </ThemeContext.Provider>
   );
 }
-
 export default App;
