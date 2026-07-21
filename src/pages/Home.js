@@ -14,11 +14,14 @@ export default function Home() {
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState('food');
   const [activeBanner, setActiveBanner] = useState(0);
+  const [activeMiddleBanner, setActiveMiddleBanner] = useState(0);
+  const [activeDineoutBanner, setActiveDineoutBanner] = useState(0);
   const [activeCategory, setActiveCategory] = useState('All');
   const [loading, setLoading] = useState(true);
   const [vegMode, setVegMode] = useState(false);
   const [activeNav, setActiveNav] = useState('home');
   const [showSearch, setShowSearch] = useState(false);
+  const [bookModal, setBookModal] = useState(null);
 
   const role = localStorage.getItem('role');
   const location = localStorage.getItem('location') || 'Kupwara';
@@ -67,11 +70,29 @@ export default function Home() {
     loadData();
   }, [token, loadData, navigate]);
 
+  // Filtered banner groups
+  const foodTopBanners = banners.filter(b => (b.category || 'food') === 'food' && (b.position || 'top') === 'top');
+  const foodMiddleBanners = banners.filter(b => (b.category || 'food') === 'food' && b.position === 'middle');
+  const dineoutTopBanners = banners.filter(b => b.category === 'dineout' && (b.position || 'top') === 'top');
+  const dineoutMiddleBanners = banners.filter(b => b.category === 'dineout' && b.position === 'middle');
+
   useEffect(() => {
-    if (banners.length <= 1) return;
-    const timer = setInterval(() => setActiveBanner(p => (p + 1) % banners.length), 4500);
+    if (foodTopBanners.length <= 1) return;
+    const timer = setInterval(() => setActiveBanner(p => (p + 1) % foodTopBanners.length), 4500);
     return () => clearInterval(timer);
-  }, [banners]);
+  }, [foodTopBanners.length]);
+
+  useEffect(() => {
+    if (foodMiddleBanners.length <= 1) return;
+    const timer = setInterval(() => setActiveMiddleBanner(p => (p + 1) % foodMiddleBanners.length), 5000);
+    return () => clearInterval(timer);
+  }, [foodMiddleBanners.length]);
+
+  useEffect(() => {
+    if (dineoutTopBanners.length <= 1) return;
+    const timer = setInterval(() => setActiveDineoutBanner(p => (p + 1) % dineoutTopBanners.length), 4500);
+    return () => clearInterval(timer);
+  }, [dineoutTopBanners.length]);
 
   useEffect(() => {
     let items = menuItems;
@@ -142,6 +163,31 @@ export default function Home() {
     { emoji: '🏪', title: 'All Stores', sub: 'Explore', bg: 'linear-gradient(135deg,#7c2d12,#431407)', action: () => navigate('/stores') },
   ];
 
+  const renderBannerCarousel = (list, active, onClick) => {
+    if (list.length === 0) return null;
+    const b = list[active % list.length];
+    return (
+      <div style={s.bigBanner}>
+        <div key={b.id} style={s.bannerSlide}>
+          {b.is_video ? (
+            <video src={b.image} autoPlay muted loop playsInline style={s.bannerMedia} />
+          ) : (
+            <img src={b.image} alt={b.title} style={s.bannerMedia} />
+          )}
+          <div style={s.bannerOverlay} />
+          <div style={s.bannerTextBox}>
+            <div style={s.bigBannerTag}>⚡ EXCLUSIVE</div>
+            <div style={s.bigBannerTitle}>{b.title}</div>
+            <div style={s.bigBannerSub}>{b.subtitle}</div>
+            <div style={s.bigBannerBtn} onClick={(e) => { e.stopPropagation(); if (b.link) navigate(b.link); }}>
+              {b.button_text || 'ORDER NOW'}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#1a0a0f', flexDirection: 'column', gap: '18px' }}>
       <style>{`@keyframes zeppoSpin { to { transform: rotate(360deg); } }`}</style>
@@ -150,9 +196,26 @@ export default function Home() {
     </div>
   );
 
+  // ===== DINEOUT TAB =====
   if (activeTab === 'dineout') {
     return (
       <div style={s.container}>
+        <style>{`@keyframes fadeBanner { from { opacity: 0; } to { opacity: 1; } }`}</style>
+
+        {bookModal && (
+          <div style={s.bookModalOverlay} onClick={() => setBookModal(null)}>
+            <div style={s.bookModalBox} onClick={e => e.stopPropagation()}>
+              <div style={{ fontSize: '40px', marginBottom: '10px' }}>🍽️</div>
+              <div style={{ fontSize: '17px', fontWeight: '800', color: '#222', marginBottom: '6px' }}>Book a Table at {bookModal.name}</div>
+              <div style={{ fontSize: '13px', color: '#888', marginBottom: '20px' }}>Table booking is launching soon! Call the restaurant directly to reserve for now.</div>
+              {bookModal.phone && (
+                <a href={`tel:${bookModal.phone}`} style={s.callBtn}>📞 Call {bookModal.phone}</a>
+              )}
+              <button style={s.closeBookBtn} onClick={() => setBookModal(null)}>Close</button>
+            </div>
+          </div>
+        )}
+
         <div style={s.header}>
           <div style={s.headerLeft} onClick={() => navigate('/location')}>
             <div style={s.locationRow}>
@@ -170,12 +233,61 @@ export default function Home() {
             </div>
           ))}
         </div>
-        <div style={s.dineoutBox}>
-          <div style={{ fontSize: '70px', marginBottom: '15px' }}>🍽️</div>
-          <h2 style={s.dineoutTitle}>Dineout Coming Soon!</h2>
-          <p style={s.dineoutText}>Book tables at your favorite Kupwara restaurants — launching soon on ZEPPO 🎉</p>
-          <button style={s.dineoutBtn} onClick={() => setActiveTab('food')}>Back to Food →</button>
+
+        <div style={s.whiteSection}>
+          {/* Top dineout banner — only from Admin panel */}
+          {dineoutTopBanners.length > 0 && (
+            <div style={{ padding: '16px 16px 5px' }}>
+              <div style={s.bigBannerWrap2}>
+                {renderBannerCarousel(dineoutTopBanners, activeDineoutBanner)}
+                {dineoutTopBanners.length > 1 && (
+                  <div style={s.bannerDots}>
+                    {dineoutTopBanners.map((_, i) => <div key={i} style={{ ...s.dot, background: i === activeDineoutBanner ? '#ff6b00' : '#ddd', width: i === activeDineoutBanner ? '18px' : '6px' }} onClick={() => setActiveDineoutBanner(i)} />)}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div style={s.section}>
+            <div style={s.sectionTitle}>🍽️ Restaurants Near You</div>
+            <div style={s.sectionSub}>Book a table & enjoy dine-in experience</div>
+            {restaurants.length === 0 ? (
+              <div style={s.noRest}>
+                <div style={{ fontSize: '50px', marginBottom: '10px' }}>😔</div>
+                <p style={{ color: '#888' }}>No restaurants available for dine-in yet</p>
+              </div>
+            ) : (
+              restaurants.map((r, idx) => (
+                <React.Fragment key={r.id}>
+                  <div style={s.dineoutCard} onClick={() => setBookModal(r)}>
+                    <div style={s.dineoutCardImgBox}>
+                      {r.image ? <img src={r.image} alt={r.name} style={s.dineoutCardImg} /> : <div style={s.dineoutCardEmoji}>{r.emoji}</div>}
+                      <div style={s.dineoutBadge}>🍽️ Dine-In</div>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={s.restName}>{r.name}</div>
+                      <div style={s.restMetaRow}>
+                        <span style={s.ratingBadge}>⭐ {r.rating}</span>
+                        <span style={s.metaDot}>•</span>
+                        <span style={s.timeText}>{r.category}</span>
+                      </div>
+                      <div style={s.restAddr}>📍 {r.address}</div>
+                      <div style={s.bookNowText}>Book a Table →</div>
+                    </div>
+                  </div>
+                  {/* Middle dineout banner inserted after 2nd restaurant */}
+                  {idx === 1 && dineoutMiddleBanners.length > 0 && (
+                    <div style={{ margin: '15px 0' }}>
+                      {renderBannerCarousel(dineoutMiddleBanners, 0)}
+                    </div>
+                  )}
+                </React.Fragment>
+              ))
+            )}
+          </div>
         </div>
+
         <BottomNav navigate={navigate} active="home" cartCount={cartCount} onHome={() => setActiveTab('food')} />
       </div>
     );
@@ -293,41 +405,13 @@ export default function Home() {
 
       {!showSearch && (
         <>
-          {/* BANNER — supports image AND video, functional Order Now button */}
-          {banners.length > 0 && (
+          {/* TOP banner — only food+top category */}
+          {foodTopBanners.length > 0 && (
             <div style={s.bigBannerWrap}>
-              <div style={s.bigBanner}>
-                {banners.map((b, i) => (
-                  i === activeBanner && (
-                    <div key={b.id} style={s.bannerSlide}>
-                      {b.is_video ? (
-                        <video
-                          src={b.image}
-                          autoPlay
-                          muted
-                          loop
-                          playsInline
-                          style={s.bannerMedia}
-                        />
-                      ) : (
-                        <img src={b.image} alt={b.title} style={s.bannerMedia} />
-                      )}
-                      <div style={s.bannerOverlay} />
-                      <div style={s.bannerTextBox}>
-                        <div style={s.bigBannerTag}>⚡ EXCLUSIVE</div>
-                        <div style={s.bigBannerTitle}>{b.title}</div>
-                        <div style={s.bigBannerSub}>{b.subtitle}</div>
-                        <div style={s.bigBannerBtn} onClick={(e) => { e.stopPropagation(); if (b.link) navigate(b.link); }}>
-                          {b.button_text || 'ORDER NOW'}
-                        </div>
-                      </div>
-                    </div>
-                  )
-                ))}
-              </div>
-              {banners.length > 1 && (
+              {renderBannerCarousel(foodTopBanners, activeBanner)}
+              {foodTopBanners.length > 1 && (
                 <div style={s.bannerDots}>
-                  {banners.map((_, i) => (
+                  {foodTopBanners.map((_, i) => (
                     <div key={i} style={{ ...s.dot, background: i === activeBanner ? '#ff6b00' : '#ddd', width: i === activeBanner ? '20px' : '6px' }} onClick={() => setActiveBanner(i)} />
                   ))}
                 </div>
@@ -351,6 +435,20 @@ export default function Home() {
                 ))}
               </div>
             </div>
+
+            {/* MIDDLE banner — shows between categories and More on ZEPPO */}
+            {foodMiddleBanners.length > 0 && (
+              <div style={{ padding: '10px 16px' }}>
+                {renderBannerCarousel(foodMiddleBanners, activeMiddleBanner)}
+                {foodMiddleBanners.length > 1 && (
+                  <div style={s.bannerDots}>
+                    {foodMiddleBanners.map((_, i) => (
+                      <div key={i} style={{ ...s.dot, background: i === activeMiddleBanner ? '#ff6b00' : '#ddd', width: i === activeMiddleBanner ? '18px' : '6px' }} onClick={() => setActiveMiddleBanner(i)} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div style={s.section}>
               <div style={s.sectionTitle}>More on ZEPPO</div>
@@ -547,11 +645,6 @@ const s = {
   vegDot: { position: 'absolute', width: '14px', height: '14px', background: 'white', borderRadius: '50%', top: '2px', transition: '0.3s' },
   vegDotBadge: (veg) => ({ width: '13px', height: '13px', border: `1.5px solid ${veg ? '#27ae60' : '#e74c3c'}`, borderRadius: '3px', position: 'relative', marginBottom: '4px', display: 'inline-block' }),
 
-  dineoutBox: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '60px 30px', background: '#f7f7f7', borderRadius: '20px 20px 0 0', marginTop: '10px', minHeight: '60vh' },
-  dineoutTitle: { fontSize: '22px', fontWeight: '800', color: '#222', marginBottom: '10px' },
-  dineoutText: { fontSize: '14px', color: '#888', lineHeight: '1.6', marginBottom: '25px' },
-  dineoutBtn: { background: '#ff6b00', color: 'white', border: 'none', padding: '13px 24px', borderRadius: '12px', fontSize: '14px', fontWeight: '700', cursor: 'pointer' },
-
   searchResults: { background: '#f7f7f7', minHeight: '100vh', padding: '15px 16px' },
   searchResultsHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' },
   searchResultsTitle: { fontSize: '14px', fontWeight: '700', color: '#222' },
@@ -571,6 +664,7 @@ const s = {
   searchStoreMeta: { fontSize: '12px', color: '#888', marginBottom: '3px' },
 
   bigBannerWrap: { margin: '0 16px 5px' },
+  bigBannerWrap2: {},
   bigBanner: { borderRadius: '18px', overflow: 'hidden', marginBottom: '10px', minHeight: '160px', position: 'relative', background: '#1a1a2e' },
   bannerSlide: { position: 'relative', minHeight: '160px', animation: 'fadeBanner 0.4s ease' },
   bannerMedia: { width: '100%', height: '160px', objectFit: 'cover', display: 'block' },
@@ -649,4 +743,16 @@ const s = {
   navItem: { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', padding: '10px 5px', cursor: 'pointer', fontSize: '11px', position: 'relative' },
   navIcon: { fontSize: '22px' },
   navCartBadge: { position: 'absolute', top: '2px', right: '18px', background: '#27ae60', color: 'white', borderRadius: '50%', width: '16px', height: '16px', fontSize: '9px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700' },
+
+  dineoutCard: { background: 'white', borderRadius: '14px', padding: '12px', marginBottom: '12px', display: 'flex', gap: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', cursor: 'pointer' },
+  dineoutCardImgBox: { width: '90px', height: '90px', borderRadius: '10px', overflow: 'hidden', flexShrink: 0, position: 'relative', background: 'linear-gradient(135deg,#ff6b00,#e05a00)' },
+  dineoutCardImg: { width: '100%', height: '100%', objectFit: 'cover' },
+  dineoutCardEmoji: { width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px' },
+  dineoutBadge: { position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.7)', color: 'white', fontSize: '9px', fontWeight: '700', padding: '3px', textAlign: 'center' },
+  bookNowText: { fontSize: '12px', color: '#ff6b00', fontWeight: '700', marginTop: '6px' },
+
+  bookModalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' },
+  bookModalBox: { background: 'white', borderRadius: '20px', padding: '28px 24px', width: '100%', maxWidth: '360px', textAlign: 'center' },
+  callBtn: { display: 'block', background: '#27ae60', color: 'white', padding: '13px', borderRadius: '12px', fontSize: '14px', fontWeight: '700', textDecoration: 'none', marginBottom: '10px' },
+  closeBookBtn: { width: '100%', padding: '12px', background: '#f3f4f6', color: '#6b7280', border: 'none', borderRadius: '12px', fontSize: '14px', cursor: 'pointer' },
 };

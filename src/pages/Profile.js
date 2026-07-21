@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useTheme } from '../App';
+import { useTheme, useCart } from '../App';
 import API from '../api';
 
 export default function Profile() {
   const navigate = useNavigate();
   const { darkMode, toggleDark } = useTheme();
+  const { cartCount } = useCart();
   const name = localStorage.getItem('name') || 'User';
   const role = localStorage.getItem('role') || 'user';
   const [page, setPage] = useState('main');
@@ -67,6 +68,19 @@ export default function Profile() {
         <span style={s.headerTitle}>{title}</span>
       </div>
       <div style={{ padding: '15px' }}>{children}</div>
+    </div>
+  );
+
+  const BottomNav = () => (
+    <div style={s.bottomNav}>
+      <div style={s.navItem} onClick={() => navigate('/')}><span style={s.navIcon}>🏠</span><span>Home</span></div>
+      <div style={s.navItem} onClick={() => navigate('/stores')}><span style={s.navIcon}>🏪</span><span>Stores</span></div>
+      <div style={{ ...s.navItem, position: 'relative' }} onClick={() => navigate('/cart')}>
+        <span style={s.navIcon}>🛒</span><span>Cart</span>
+        {cartCount > 0 && <span style={s.navCartBadge}>{cartCount}</span>}
+      </div>
+      <div style={s.navItem} onClick={() => navigate('/track')}><span style={s.navIcon}>📦</span><span>Orders</span></div>
+      <div style={{ ...s.navItem, color: '#ff6b00' }}><span style={s.navIcon}>👤</span><span>Profile</span></div>
     </div>
   );
 
@@ -278,7 +292,6 @@ export default function Profile() {
         </div>
       ))}
 
-      {/* Raise a Ticket */}
       <div style={{ background: 'white', borderRadius: '12px', padding: '16px', marginTop: '15px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
         <div style={{ fontWeight: '700', color: '#222', marginBottom: '10px' }}>📩 Raise a Ticket</div>
         {ticketSent ? (
@@ -357,7 +370,6 @@ export default function Profile() {
   return (
     <div style={s.container}>
 
-      {/* Top Header */}
       <div style={s.topHeader}>
         <button style={s.backBtn} onClick={() => navigate('/')}>←</button>
         <div style={s.topHeaderRight}>
@@ -366,7 +378,6 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* Profile Info */}
       <div style={s.profileTop}>
         <div style={s.profileName}>{name}</div>
         <div style={s.profilePhone}>+91 - 7006XXXXXX</div>
@@ -374,7 +385,6 @@ export default function Profile() {
         <div style={s.editProfileBtn} onClick={() => setPage('edit')}>Edit profile ›</div>
       </div>
 
-      {/* Premium Banner */}
       <div style={s.premiumBanner} onClick={() => role === 'admin' ? navigate('/admin') : {}}>
         <div style={s.premiumLeft}>
           <div style={s.premiumIcon}>👑</div>
@@ -387,7 +397,6 @@ export default function Profile() {
         <span style={s.premiumArrow}>›</span>
       </div>
 
-      {/* Quick Actions */}
       <div style={s.quickActions}>
         {[
           { icon: '📍', label: 'Saved\nAddress', action: () => setPage('address') },
@@ -402,7 +411,6 @@ export default function Profile() {
         ))}
       </div>
 
-      {/* Menu */}
       <div style={s.menuSection}>
         <MenuItem icon="📦" label="Your orders" onClick={() => setPage('orders')} />
         <MenuItem icon="📍" label="Address book" onClick={() => setPage('address')} />
@@ -423,13 +431,7 @@ export default function Profile() {
         <MenuItem icon="🚪" label="Log out" red onClick={logout} />
       </div>
 
-      {/* Bottom Nav */}
-      <div style={s.bottomNav}>
-        <div style={s.navItem} onClick={() => navigate('/')}><span style={s.navIcon}>🏠</span><span>Home</span></div>
-        <div style={s.navItem} onClick={() => navigate('/stores')}><span style={s.navIcon}>🏪</span><span>Stores</span></div>
-        <div style={s.navItem} onClick={() => navigate('/track')}><span style={s.navIcon}>📦</span><span>Orders</span></div>
-        <div style={{ ...s.navItem, color: '#ff6b00' }}><span style={s.navIcon}>👤</span><span>Profile</span></div>
-      </div>
+      <BottomNav />
     </div>
   );
 }
@@ -481,4 +483,5 @@ const s = {
   bottomNav: { position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: '480px', background: 'white', borderTop: '1px solid #f0f0f0', display: 'flex', zIndex: 100, boxShadow: '0 -2px 10px rgba(0,0,0,0.06)' },
   navItem: { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', padding: '10px 5px', cursor: 'pointer', color: '#888', fontSize: '11px' },
   navIcon: { fontSize: '22px' },
+  navCartBadge: { position: 'absolute', top: '2px', right: '18px', background: '#27ae60', color: 'white', borderRadius: '50%', width: '16px', height: '16px', fontSize: '9px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700' },
 };

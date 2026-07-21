@@ -12,7 +12,7 @@ export default function Admin() {
   const [portions, setPortions] = useState([]);
   const [portionInput, setPortionInput] = useState({ name: '', price: '' });
   const [dboyForm, setDboyForm] = useState({ name: '', phone: '', email: '', password: '', salary_per_delivery: 50 });
-  const [bannerForm, setBannerForm] = useState({ title: '', subtitle: '', button_text: 'Order Now', link: '' });
+  const [bannerForm, setBannerForm] = useState({ title: '', subtitle: '', button_text: 'Order Now', link: '', category: 'food', position: 'top' });
   const [couponForm, setCouponForm] = useState({ code: '', discount: '', type: 'flat', min_order: 0 });
   const [editRest, setEditRest] = useState(null);
   const [showNotif, setShowNotif] = useState(false);
@@ -191,7 +191,7 @@ export default function Admin() {
     if (!bannerFileRef.current?.files[0]) { alert('Photo ya video upload karo!'); return; }
     const r = await uploadImage(bannerFileRef.current.files[0], 'banner');
     await API.post('/api/banners/add', { ...bannerForm, image: r.url, is_video: r.is_video });
-    setBannerForm({ title: '', subtitle: '', button_text: 'Order Now', link: '' });
+    setBannerForm({ title: '', subtitle: '', button_text: 'Order Now', link: '', category: 'food', position: 'top' });
     if (bannerFileRef.current) bannerFileRef.current.value = '';
     loadAll();
   };
@@ -715,8 +715,24 @@ export default function Admin() {
                 <input style={s.input} placeholder="Subtitle" value={bannerForm.subtitle} onChange={e => setBannerForm({ ...bannerForm, subtitle: e.target.value })} />
                 <input style={s.input} placeholder="Button Text (e.g. Order Now)" value={bannerForm.button_text} onChange={e => setBannerForm({ ...bannerForm, button_text: e.target.value })} />
                 <input style={s.input} placeholder="Link when tapped (e.g. /order/3 or /stores)" value={bannerForm.link} onChange={e => setBannerForm({ ...bannerForm, link: e.target.value })} />
+                <div style={s.formGrid}>
+                  <div>
+                    <label style={s.uploadLabel}>Show on which tab?</label>
+                    <select style={s.input} value={bannerForm.category} onChange={e => setBannerForm({ ...bannerForm, category: e.target.value })}>
+                      <option value="food">🍔 Food Tab</option>
+                      <option value="dineout">🍽️ Dineout Tab</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={s.uploadLabel}>Position on page</label>
+                    <select style={s.input} value={bannerForm.position} onChange={e => setBannerForm({ ...bannerForm, position: e.target.value })}>
+                      <option value="top">⬆️ Top (main banner)</option>
+                      <option value="middle">↕️ Middle (while scrolling)</option>
+                    </select>
+                  </div>
+                </div>
                 <div style={{ fontSize: '12px', color: '#888', marginBottom: '12px' }}>
-                  💡 Examples: <code>/stores</code> (all stores) · <code>/order/5</code> (specific restaurant, use its ID) · leave blank for no action.
+                  💡 Link examples: <code>/stores</code> (all stores) · <code>/order/5</code> (specific restaurant) · leave blank for no action.
                 </div>
                 <label style={s.uploadLabel}>🖼️ Banner Photo or Video:</label>
                 <input type="file" ref={bannerFileRef} accept="image/*,video/*" style={s.fileInput} />
@@ -736,7 +752,7 @@ export default function Admin() {
                       <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)', padding: '16px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
                         <div style={{ fontSize: '16px', fontWeight: '700', color: 'white' }}>{b.title}</div>
                         <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.85)' }}>{b.subtitle}</div>
-                        <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', marginTop: '4px' }}>Link: {b.link || '(none)'} {b.is_video ? '· 🎥 Video' : ''}</div>
+                        <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', marginTop: '4px' }}>Link: {b.link || '(none)'} {b.is_video ? '· 🎥 Video' : ''} · {b.category === 'dineout' ? '🍽️ Dineout' : '🍔 Food'} tab · {b.position === 'middle' ? '↕️ Middle' : '⬆️ Top'}</div>
                       </div>
                       <button style={{ ...s.btnRed, position: 'absolute', top: '10px', right: '10px' }} onClick={() => { API.post('/api/banners/delete', { id: b.id }); loadAll(); }}>Delete</button>
                     </div>
