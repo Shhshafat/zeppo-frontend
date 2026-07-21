@@ -58,9 +58,10 @@ export default function Track() {
   const getPaymentBadge = (method) => method === 'upi' ? '💳 UPI' : '💵 Cash';
 
   if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#1a0a0f', flexDirection: 'column', gap: '15px' }}>
-      <div style={{ fontSize: '50px' }}>📦</div>
-      <div style={{ color: '#ff6b00', fontWeight: '700' }}>Loading Orders...</div>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#1a0a0f', flexDirection: 'column', gap: '18px' }}>
+      <style>{`@keyframes zeppoSpin { to { transform: rotate(360deg); } }`}</style>
+      <div style={{ color: '#ff6b00', fontWeight: '800', fontSize: '20px', letterSpacing: '3px' }}>ZEPPO</div>
+      <div style={{ width: '30px', height: '30px', border: '3px solid rgba(255,107,0,0.2)', borderTopColor: '#ff6b00', borderRadius: '50%', animation: 'zeppoSpin 0.8s linear infinite' }} />
     </div>
   );
 

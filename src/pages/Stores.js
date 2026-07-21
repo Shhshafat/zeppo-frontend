@@ -74,9 +74,10 @@ export default function Stores() {
   ];
 
   if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#f5f5f5', flexDirection: 'column', gap: '15px' }}>
-      <div style={{ fontSize: '50px' }}>🏪</div>
-      <div style={{ color: '#ff6b00', fontWeight: '700' }}>Loading Stores...</div>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#f5f5f5', flexDirection: 'column', gap: '18px' }}>
+      <style>{`@keyframes zeppoSpin { to { transform: rotate(360deg); } }`}</style>
+      <div style={{ color: '#ff6b00', fontWeight: '800', fontSize: '20px', letterSpacing: '3px' }}>ZEPPO</div>
+      <div style={{ width: '30px', height: '30px', border: '3px solid rgba(255,107,0,0.15)', borderTopColor: '#ff6b00', borderRadius: '50%', animation: 'zeppoSpin 0.8s linear infinite' }} />
     </div>
   );
 
@@ -144,8 +145,14 @@ export default function Stores() {
                 <div style={s.dishVeg}>🟢</div>
                 <div style={s.dishName}>{item.name}</div>
                 <div style={s.dishMeta}>
-                  <span style={s.dishPriceOld}>₹{Math.round(item.price * 1.3)}</span>
-                  <span style={s.dishPrice}>₹{item.price}</span>
+                  {item.original_price ? (
+                    <>
+                      <span style={s.dishPriceOld}>₹{item.original_price}</span>
+                      <span style={s.dishPrice}>₹{item.price}</span>
+                    </>
+                  ) : (
+                    <span style={s.dishPrice}>₹{item.price}</span>
+                  )}
                 </div>
                 <div style={s.dishRestName}>{item.restaurant_name}</div>
               </div>

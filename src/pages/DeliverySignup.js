@@ -7,10 +7,10 @@ export default function DeliverySignup() {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
     full_name: '', father_name: '', phone: '', aadhar: '',
-    dob: '', address: '', has_bike: '', bike_number: '', education: ''
+    dob: '', address: '', has_bike: '', bike_number: ''
   });
   const [docs, setDocs] = useState({
-    photo: null, aadhar_doc: null, pan: null, license: null, edu_cert: null
+    photo: null, aadhar_doc: null, pan: null, license: null
   });
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
@@ -60,7 +60,7 @@ export default function DeliverySignup() {
 
       {/* Step Indicators */}
       <div style={s.steps}>
-        {['Personal Info', 'Documents', 'Upload'].map((label, i) => (
+        {['Personal Info', 'Vehicle', 'Upload'].map((label, i) => (
           <div key={i} style={s.stepItem}>
             <div style={{ ...s.stepDot, background: step > i ? '#ff6b00' : step === i + 1 ? '#ff6b00' : '#ddd', color: step >= i + 1 ? 'white' : '#888' }}>
               {step > i + 1 ? '✓' : i + 1}
@@ -106,7 +106,7 @@ export default function DeliverySignup() {
           </>
         )}
 
-        {/* Step 2 — Vehicle & Education */}
+        {/* Step 2 — Vehicle */}
         {step === 2 && (
           <>
             <label style={s.label}>Do you have a Bike? *</label>
@@ -125,18 +125,9 @@ export default function DeliverySignup() {
               </>
             )}
 
-            <label style={s.label}>Highest Education *</label>
-            <div style={s.radioGroup}>
-              {['8th Pass', '10th Pass', '12th Pass', 'Graduate'].map(opt => (
-                <div key={opt} style={{ ...s.radioBtn, background: form.education === opt ? '#ff6b00' : 'white', color: form.education === opt ? 'white' : '#333', border: `1.5px solid ${form.education === opt ? '#ff6b00' : '#e0e0e0'}` }} onClick={() => update('education', opt)}>
-                  🎓 {opt}
-                </div>
-              ))}
-            </div>
-
             <button style={s.orangeBtn} onClick={() => {
-              if (!form.has_bike || !form.education) {
-                setError('Please fill all fields!'); return;
+              if (!form.has_bike) {
+                setError('Please select an option!'); return;
               }
               setError(''); setStep(3);
             }}>Next →</button>
@@ -155,7 +146,6 @@ export default function DeliverySignup() {
               { key: 'aadhar_doc', label: '🪪 Aadhar Card', desc: 'Front and back side' },
               { key: 'pan', label: '🪪 PAN Card', desc: 'Clear photo of PAN card' },
               { key: 'license', label: '🚗 Driving License', desc: 'Valid driving license' },
-              { key: 'edu_cert', label: '📜 Education Certificate', desc: '8th/10th/12th marksheet' },
             ].map(doc => (
               <div key={doc.key} style={s.uploadBox}>
                 <div style={s.uploadLeft}>

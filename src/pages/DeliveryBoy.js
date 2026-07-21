@@ -6,139 +6,282 @@ export default function DeliveryBoy() {
   const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [delivered, setDelivered] = useState(0);
+  const [me, setMe] = useState(null);
+  const [toggling, setToggling] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const token = localStorage.getItem('token');
 
   useEffect(() => {
-    loadOrders();
-    const interval = setInterval(loadOrders, 30000);
+    if (!token) { navigate('/login'); return; }
+    Promise.all([loadOrders(), loadMe()]).finally(() => setLoading(false));
+    const interval = setInterval(() => { loadOrders(); loadMe(); }, 30000);
     return () => clearInterval(interval);
   }, []);
 
   const loadOrders = async () => {
-    const res = await API.get('/api/delivery-orders');
+    const res = await API.get('/api/delivery-orders', { headers: { Authorization: `Bearer ${token}` } });
     setOrders(res.data);
     setDelivered(res.data.filter(o => o.status === 'delivered').length);
+  };
+
+  const loadMe = async () => {
+    const res = await API.get('/api/delivery-boys/me', { headers: { Authorization: `Bearer ${token}` } });
+    setMe(res.data);
+  };
+
+  const toggleOnline = async () => {
+    setToggling(true);
+    await API.post('/api/delivery-boys/toggle-online', {}, { headers: { Authorization: `Bearer ${token}` } });
+    await loadMe();
+    setToggling(false);
   };
 
   const updateStatus = async (id, status) => {
     await API.post('/api/orders/status', { id, status });
     loadOrders();
+    loadMe();
   };
 
+  const logout = () => { localStorage.clear(); navigate('/login'); };
+
   const activeOrders = orders.filter(o => o.status !== 'delivered');
+  const isOnline = me?.is_online === 1;
+  const netBalance = me ? me.total_earned - (me.advance_taken || 0) : 0;
+
+  const statusInfo = {
+    confirmed: { label: 'New Order', color: '#3b82f6', bg: '#eff6ff' },
+    preparing: { label: 'Preparing', color: '#8b5cf6', bg: '#f5f3ff' },
+    on_the_way: { label: 'On The Way', color: '#f59e0b', bg: '#fffbeb' },
+  };
+
+  if (loading) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#f8f9fb', flexDirection: 'column', gap: '18px' }}>
+      <style>{`@keyframes zeppoSpin { to { transform: rotate(360deg); } }`}</style>
+      <div style={{ color: '#ff6b00', fontWeight: '800', fontSize: '20px', letterSpacing: '3px' }}>ZEPPO</div>
+      <div style={{ width: '30px', height: '30px', border: '3px solid rgba(255,107,0,0.15)', borderTopColor: '#ff6b00', borderRadius: '50%', animation: 'zeppoSpin 0.8s linear infinite' }} />
+    </div>
+  );
 
   return (
-    <div style={s.container}>
-      <div style={s.header}>
-        <div>
-          <div style={s.headerTitle}>🛵 ZEPPO Delivery</div>
-          <div style={s.headerSub}>Delivery Dashboard</div>
-        </div>
-        <button style={s.logoutBtn} onClick={() => { localStorage.clear(); navigate('/login'); }}>Logout</button>
-      </div>
+    <div style={s.page}>
+      <div style={s.container}>
 
-      <div style={s.content}>
-        {/* Stats */}
-        <div style={s.statsRow}>
-          <div style={s.statCard}>
-            <div style={s.statNum}>{activeOrders.length}</div>
-            <div style={s.statLabel}>Active Orders</div>
+        {/* Header */}
+        <div style={s.header}>
+          <div style={s.headerTop}>
+            <div style={s.brandRow}>
+              <div style={s.brandIcon}>🛵</div>
+              <div>
+                <div style={s.brandText}>ZEPPO</div>
+                <div style={s.brandSub}>Delivery Partner</div>
+              </div>
+            </div>
+            <button style={s.logoutBtn} onClick={logout}>Logout</button>
           </div>
-          <div style={s.statCard}>
-            <div style={s.statNum}>{delivered}</div>
-            <div style={s.statLabel}>Delivered Today</div>
-          </div>
+          {me && <div style={s.welcomeText}>Hi, {me.name.split(' ')[0]} 👋</div>}
         </div>
 
-        {/* Orders */}
-        {activeOrders.length === 0 ? (
-          <div style={s.noOrders}>
-            <div style={s.noOrdersIcon}>🛵</div>
-            <h2 style={s.noOrdersTitle}>No active orders!</h2>
-            <p style={s.noOrdersText}>Waiting for new orders... 🕐</p>
+        <div style={s.content}>
+
+          {/* Online/Offline Status Card */}
+          <div style={{ ...s.statusCard, background: isOnline ? 'linear-gradient(135deg, #059669, #10b981)' : 'linear-gradient(135deg, #64748b, #94a3b8)' }}>
+            <div style={s.statusLeft}>
+              <div style={{ ...s.statusPulse, background: isOnline ? '#4ade80' : '#cbd5e1' }}>
+                {isOnline && <div style={s.pulseRing} />}
+              </div>
+              <div>
+                <div style={s.statusTitle}>{isOnline ? "You're Online" : "You're Offline"}</div>
+                <div style={s.statusSub}>{isOnline ? 'Receiving orders now' : 'Tap to start receiving orders'}</div>
+              </div>
+            </div>
+            <button style={s.statusToggle} onClick={toggleOnline} disabled={toggling}>
+              {toggling ? '···' : isOnline ? 'Go Offline' : 'Go Online'}
+            </button>
           </div>
-        ) : (
-          activeOrders.map(o => {
-            let items = [];
-            try { items = JSON.parse(o.items); } catch(e) {}
-            return (
-              <div key={o.id} style={s.orderCard}>
-                <div style={{ ...s.statusBadge, ...getBadgeColor(o.status) }}>
-                  {o.status.replace('_', ' ').toUpperCase()}
-                </div>
-                <div style={s.restName}>🍽️ {o.restaurant_name || 'Restaurant'}</div>
-                <div style={s.infoRow}>👤 {o.customer_name}</div>
-                <div style={s.infoRow}>📞 <a href={`tel:${o.customer_phone}`} style={s.phone}>{o.customer_phone}</a></div>
-                <div style={s.infoRow}>📍 {o.customer_address}</div>
-                <div style={s.itemsList}>
-                  {items.map((item, i) => (
-                    <div key={i} style={s.itemRow}>
-                      <span>{item.name}</span>
-                      <span>₹{item.price}</span>
+
+          {/* Stats Row */}
+          <div style={s.statsGrid}>
+            <div style={s.statBox}>
+              <div style={s.statIcon}>📦</div>
+              <div style={s.statValue}>{activeOrders.length}</div>
+              <div style={s.statLabel}>Active</div>
+            </div>
+            <div style={s.statBox}>
+              <div style={s.statIcon}>✅</div>
+              <div style={s.statValue}>{delivered}</div>
+              <div style={s.statLabel}>Delivered</div>
+            </div>
+            <div style={s.statBox}>
+              <div style={s.statIcon}>💰</div>
+              <div style={s.statValue}>₹{netBalance}</div>
+              <div style={s.statLabel}>Balance</div>
+            </div>
+          </div>
+
+          {/* Earnings Card */}
+          {me && (
+            <div style={s.earningsCard}>
+              <div style={s.earningsHeader}>💼 Earnings Summary</div>
+              <div style={s.earningsRow}>
+                <span style={s.earningsLabel}>Total Earned</span>
+                <span style={{ ...s.earningsVal, color: '#059669' }}>₹{me.total_earned}</span>
+              </div>
+              <div style={s.earningsDivider} />
+              <div style={s.earningsRow}>
+                <span style={s.earningsLabel}>Advance Taken</span>
+                <span style={{ ...s.earningsVal, color: '#d97706' }}>−₹{me.advance_taken || 0}</span>
+              </div>
+              <div style={s.earningsDivider} />
+              <div style={s.earningsRow}>
+                <span style={{ ...s.earningsLabel, fontWeight: '700', color: '#111827' }}>Net Balance</span>
+                <span style={{ ...s.earningsVal, color: '#2563eb', fontSize: '19px' }}>₹{netBalance}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Orders Section */}
+          <div style={s.sectionTitle}>
+            {isOnline ? `Active Orders (${activeOrders.length})` : 'Orders'}
+          </div>
+
+          {!isOnline ? (
+            <div style={s.emptyState}>
+              <div style={s.emptyIcon}>😴</div>
+              <div style={s.emptyTitle}>You're currently offline</div>
+              <div style={s.emptyText}>Go online to start receiving delivery orders</div>
+            </div>
+          ) : activeOrders.length === 0 ? (
+            <div style={s.emptyState}>
+              <div style={s.emptyIcon}>🛵</div>
+              <div style={s.emptyTitle}>No active orders</div>
+              <div style={s.emptyText}>New orders will appear here automatically</div>
+            </div>
+          ) : (
+            activeOrders.map(o => {
+              let items = [];
+              try { items = JSON.parse(o.items); } catch(e) {}
+              const info = statusInfo[o.status] || { label: o.status, color: '#666', bg: '#f5f5f5' };
+              return (
+                <div key={o.id} style={s.orderCard}>
+                  <div style={s.orderCardHeader}>
+                    <span style={{ ...s.statusBadge, color: info.color, background: info.bg }}>
+                      ● {info.label}
+                    </span>
+                    <span style={s.orderTotal}>₹{o.total}</span>
+                  </div>
+
+                  <div style={s.restRow}>
+                    <span style={s.restIcon}>🍽️</span>
+                    <span style={s.restName}>{o.restaurant_name || 'Restaurant'}</span>
+                  </div>
+
+                  <div style={s.detailsBox}>
+                    <div style={s.detailRow}>
+                      <span style={s.detailIcon}>👤</span>
+                      <span style={s.detailText}>{o.customer_name}</span>
                     </div>
-                  ))}
-                </div>
-                <div style={s.total}>Total: ₹{o.total}</div>
-                <div style={s.btnRow}>
+                    <div style={s.detailRow}>
+                      <span style={s.detailIcon}>📞</span>
+                      <a href={`tel:${o.customer_phone}`} style={s.phoneLink}>{o.customer_phone}</a>
+                    </div>
+                    <div style={s.detailRow}>
+                      <span style={s.detailIcon}>📍</span>
+                      <span style={s.detailText}>{o.customer_address}</span>
+                    </div>
+                  </div>
+
+                  <div style={s.itemsBox}>
+                    {items.map((item, i) => (
+                      <div key={i} style={s.itemRow}>
+                        <span style={s.itemName}>{item.name}</span>
+                        <span style={s.itemPrice}>₹{item.price}</span>
+                      </div>
+                    ))}
+                  </div>
+
                   {o.status === 'confirmed' && (
-                    <button style={s.btnPreparing} onClick={() => updateStatus(o.id, 'preparing')}>
+                    <button style={{ ...s.actionBtn, background: '#8b5cf6' }} onClick={() => updateStatus(o.id, 'preparing')}>
                       👨‍🍳 Start Preparing
                     </button>
                   )}
                   {o.status === 'preparing' && (
-                    <button style={s.btnPickup} onClick={() => updateStatus(o.id, 'on_the_way')}>
+                    <button style={{ ...s.actionBtn, background: '#3b82f6' }} onClick={() => updateStatus(o.id, 'on_the_way')}>
                       🛵 Picked Up — On the Way
                     </button>
                   )}
                   {o.status === 'on_the_way' && (
-                    <button style={s.btnDeliver} onClick={() => updateStatus(o.id, 'delivered')}>
+                    <button style={{ ...s.actionBtn, background: '#ff6b00' }} onClick={() => updateStatus(o.id, 'delivered')}>
                       ✅ Mark as Delivered
                     </button>
                   )}
                 </div>
-              </div>
-            );
-          })
-        )}
+              );
+            })
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-function getBadgeColor(status) {
-  const colors = {
-    confirmed: { background: '#cfe2ff', color: '#084298' },
-    preparing: { background: '#e2d9f3', color: '#6f42c1' },
-    on_the_way: { background: '#ffd700', color: '#333' },
-    delivered: { background: '#d1e7dd', color: '#0a3622' },
-  };
-  return colors[status] || { background: '#f0f0f0', color: '#333' };
-}
-
 const s = {
-  container: { maxWidth: '480px', margin: '0 auto', minHeight: '100vh', background: '#f5f5f5' },
-  header: { background: '#ff6b00', color: 'white', padding: '15px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  headerTitle: { fontSize: '20px', fontWeight: '700' },
-  headerSub: { fontSize: '13px', opacity: '0.9', marginTop: '2px' },
-  logoutBtn: { background: 'rgba(255,255,255,0.2)', border: '1px solid white', color: 'white', padding: '8px 15px', borderRadius: '20px', cursor: 'pointer', fontSize: '13px' },
-  content: { padding: '15px 16px' },
-  statsRow: { display: 'flex', gap: '15px', marginBottom: '20px' },
-  statCard: { flex: 1, background: 'white', borderRadius: '12px', padding: '20px', textAlign: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: '4px solid #ff6b00' },
-  statNum: { fontSize: '32px', fontWeight: '700', color: '#ff6b00' },
-  statLabel: { fontSize: '13px', color: '#888', marginTop: '5px' },
-  noOrders: { textAlign: 'center', padding: '60px 20px' },
-  noOrdersIcon: { fontSize: '60px', marginBottom: '15px' },
-  noOrdersTitle: { fontSize: '20px', color: '#333', marginBottom: '8px' },
-  noOrdersText: { color: '#888' },
-  orderCard: { background: 'white', borderRadius: '12px', padding: '20px', marginBottom: '15px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' },
-  statusBadge: { display: 'inline-block', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '700', marginBottom: '12px' },
-  restName: { fontSize: '18px', fontWeight: '700', color: '#333', marginBottom: '10px' },
-  infoRow: { fontSize: '14px', color: '#555', marginBottom: '6px' },
-  phone: { color: '#ff6b00', textDecoration: 'none', fontWeight: '600' },
-  itemsList: { background: '#f9f9f9', borderRadius: '8px', padding: '10px', margin: '12px 0' },
-  itemRow: { display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#555', padding: '3px 0' },
-  total: { fontSize: '18px', fontWeight: '700', color: '#ff6b00', marginBottom: '15px' },
-  btnRow: { display: 'flex', gap: '10px' },
-  btnPreparing: { flex: 1, background: '#6f42c1', color: 'white', border: 'none', padding: '12px', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
-  btnPickup: { flex: 1, background: '#0d6efd', color: 'white', border: 'none', padding: '12px', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
-  btnDeliver: { flex: 1, background: '#ff6b00', color: 'white', border: 'none', padding: '12px', borderRadius: '8px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' },
+  page: { minHeight: '100vh', background: '#f8f9fb' },
+  container: { maxWidth: '480px', margin: '0 auto' },
+
+  header: { background: 'linear-gradient(135deg, #1a0a12, #2a1520)', padding: '45px 20px 24px', borderRadius: '0 0 24px 24px' },
+  headerTop: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' },
+  brandRow: { display: 'flex', alignItems: 'center', gap: '10px' },
+  brandIcon: { width: '38px', height: '38px', background: '#ff6b00', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' },
+  brandText: { fontSize: '17px', fontWeight: '800', color: 'white', letterSpacing: '1px' },
+  brandSub: { fontSize: '11px', color: 'rgba(255,255,255,0.5)' },
+  logoutBtn: { background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', color: 'white', padding: '8px 16px', borderRadius: '10px', cursor: 'pointer', fontSize: '13px', fontWeight: '600' },
+  welcomeText: { fontSize: '22px', fontWeight: '700', color: 'white' },
+
+  content: { padding: '18px 16px 40px' },
+
+  statusCard: { borderRadius: '18px', padding: '18px', marginTop: '-30px', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 8px 24px rgba(0,0,0,0.15)' },
+  statusLeft: { display: 'flex', alignItems: 'center', gap: '12px' },
+  statusPulse: { width: '12px', height: '12px', borderRadius: '50%', position: 'relative', flexShrink: 0 },
+  pulseRing: { position: 'absolute', top: '-4px', left: '-4px', width: '20px', height: '20px', borderRadius: '50%', border: '2px solid rgba(255,255,255,0.5)' },
+  statusTitle: { fontSize: '15px', fontWeight: '700', color: 'white', marginBottom: '2px' },
+  statusSub: { fontSize: '12px', color: 'rgba(255,255,255,0.8)' },
+  statusToggle: { background: 'white', border: 'none', padding: '10px 18px', borderRadius: '10px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', color: '#111827' },
+
+  statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '16px' },
+  statBox: { background: 'white', borderRadius: '14px', padding: '16px 8px', textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f0f0f2' },
+  statIcon: { fontSize: '18px', marginBottom: '6px' },
+  statValue: { fontSize: '18px', fontWeight: '800', color: '#111827' },
+  statLabel: { fontSize: '11px', color: '#9ca3af', marginTop: '2px' },
+
+  earningsCard: { background: 'white', borderRadius: '16px', padding: '18px', marginBottom: '22px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f0f0f2' },
+  earningsHeader: { fontSize: '14px', fontWeight: '700', color: '#111827', marginBottom: '12px' },
+  earningsRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0' },
+  earningsLabel: { fontSize: '13.5px', color: '#6b7280' },
+  earningsVal: { fontSize: '15px', fontWeight: '700' },
+  earningsDivider: { height: '1px', background: '#f3f4f6', margin: '4px 0' },
+
+  sectionTitle: { fontSize: '16px', fontWeight: '700', color: '#111827', marginBottom: '12px' },
+
+  emptyState: { textAlign: 'center', padding: '50px 20px', background: 'white', borderRadius: '16px', border: '1px solid #f0f0f2' },
+  emptyIcon: { fontSize: '48px', marginBottom: '12px' },
+  emptyTitle: { fontSize: '16px', fontWeight: '700', color: '#374151', marginBottom: '5px' },
+  emptyText: { fontSize: '13px', color: '#9ca3af' },
+
+  orderCard: { background: 'white', borderRadius: '16px', padding: '16px', marginBottom: '14px', boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)', border: '1px solid #f0f0f2' },
+  orderCardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' },
+  statusBadge: { fontSize: '11.5px', fontWeight: '700', padding: '5px 12px', borderRadius: '20px' },
+  orderTotal: { fontSize: '18px', fontWeight: '800', color: '#111827' },
+  restRow: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' },
+  restIcon: { fontSize: '16px' },
+  restName: { fontSize: '15px', fontWeight: '700', color: '#111827' },
+  detailsBox: { background: '#fafafa', borderRadius: '12px', padding: '12px', marginBottom: '10px' },
+  detailRow: { display: 'flex', alignItems: 'center', gap: '10px', padding: '4px 0' },
+  detailIcon: { fontSize: '13px', width: '18px', flexShrink: 0 },
+  detailText: { fontSize: '13.5px', color: '#374151' },
+  phoneLink: { fontSize: '13.5px', color: '#ff6b00', fontWeight: '700', textDecoration: 'none' },
+  itemsBox: { marginBottom: '14px' },
+  itemRow: { display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#6b7280', padding: '3px 0' },
+  itemName: {},
+  itemPrice: { fontWeight: '600', color: '#374151' },
+  actionBtn: { width: '100%', color: 'white', border: 'none', padding: '13px', borderRadius: '12px', fontSize: '14px', fontWeight: '700', cursor: 'pointer' },
 };

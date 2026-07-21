@@ -5,54 +5,76 @@ import API from '../api';
 export default function Admin() {
   const navigate = useNavigate();
   const [page, setPage] = useState('dashboard');
-  const [data, setData] = useState({ orders: [], restaurants: [], users: [], applications: [], deliveryBoys: [], notifications: [], banners: [], coupons: [], analytics: {} });
+  const [data, setData] = useState({ orders: [], restaurants: [], users: [], applications: [], deliveryBoys: [], notifications: [], banners: [], coupons: [], analytics: {}, shifts: [] });
   const [unread, setUnread] = useState(0);
   const [restForm, setRestForm] = useState({ name: '', category: '', emoji: '🍽️', address: '', description: '', image: '', commission_percent: 15, phone: '', min_order: 0, delivery_charge: 0, opening_time: '09:00', closing_time: '23:00' });
-  const [menuForm, setMenuForm] = useState({ restaurant_id: '', category: '', name: '', price: '', original_price: '', description: '', image: '' });
-  const [portions, setPortions] = useState([]); // [{name:'Half', price:100}]
+  const [menuForm, setMenuForm] = useState({ restaurant_id: '', category: '', name: '', price: '', original_price: '', description: '', image: '', is_veg: 1 });
+  const [portions, setPortions] = useState([]);
   const [portionInput, setPortionInput] = useState({ name: '', price: '' });
   const [dboyForm, setDboyForm] = useState({ name: '', phone: '', email: '', password: '', salary_per_delivery: 50 });
-  const [bannerForm, setBannerForm] = useState({ title: '', subtitle: '', button_text: 'Order Now' });
+  const [bannerForm, setBannerForm] = useState({ title: '', subtitle: '', button_text: 'Order Now', link: '' });
   const [couponForm, setCouponForm] = useState({ code: '', discount: '', type: 'flat', min_order: 0 });
   const [editRest, setEditRest] = useState(null);
   const [showNotif, setShowNotif] = useState(false);
   const [advanceModal, setAdvanceModal] = useState(null);
   const [advanceAmt, setAdvanceAmt] = useState('');
+  const [advanceNote, setAdvanceNote] = useState('');
+  const [advanceHistory, setAdvanceHistory] = useState([]);
+  const [removeModal, setRemoveModal] = useState(null);
+
+  const [restSettlements, setRestSettlements] = useState([]);
+  const [payRestModal, setPayRestModal] = useState(null);
+  const [payAmt, setPayAmt] = useState('');
+  const [payNote, setPayNote] = useState('');
+  const [payDeliveryModal, setPayDeliveryModal] = useState(null);
+  const [settleAmt, setSettleAmt] = useState('');
+  const [settleNote, setSettleNote] = useState('');
+
+  const [tickets, setTickets] = useState([]);
+  const [ticketFilter, setTicketFilter] = useState('open');
+  const [replyModal, setReplyModal] = useState(null);
+  const [replyText, setReplyText] = useState('');
+
   const restImgRef = useRef();
   const foodImgRef = useRef();
+  const bannerFileRef = useRef();
 
   useEffect(() => { loadAll(); }, []);
+  useEffect(() => { if (page === 'settlements') loadSettlements(); }, [page]);
+  useEffect(() => { if (page === 'tickets') loadTickets(); }, [page]);
 
   const loadAll = async () => {
-    const [orders, rests, users, apps, dboys, notifs, banners, coupons, analytics] = await Promise.all([
-      API.get('/api/orders'),
-      API.get('/api/restaurants'),
-      API.get('/api/users'),
-      API.get('/api/applications'),
-      API.get('/api/delivery-boys/stats'),
-      API.get('/api/notifications'),
-      API.get('/api/banners'),
-      API.get('/api/coupons'),
-      API.get('/api/analytics'),
+    const [orders, rests, users, apps, dboys, notifs, banners, coupons, analytics, shifts] = await Promise.all([
+      API.get('/api/orders'), API.get('/api/restaurants'), API.get('/api/users'), API.get('/api/applications'),
+      API.get('/api/delivery-boys/stats'), API.get('/api/notifications'), API.get('/api/banners'),
+      API.get('/api/coupons'), API.get('/api/analytics'), API.get('/api/delivery-boys/all-shifts'),
     ]);
-    setData({ orders: orders.data, restaurants: rests.data, users: users.data, applications: apps.data, deliveryBoys: dboys.data, notifications: notifs.data, banners: banners.data, coupons: coupons.data, analytics: analytics.data });
+    setData({ orders: orders.data, restaurants: rests.data, users: users.data, applications: apps.data, deliveryBoys: dboys.data, notifications: notifs.data, banners: banners.data, coupons: coupons.data, analytics: analytics.data, shifts: shifts.data });
     setUnread(notifs.data.filter(n => !n.is_read).length);
-    if (rests.data.length > 0 && !menuForm.restaurant_id) {
-      setMenuForm(f => ({ ...f, restaurant_id: rests.data[0].id }));
-    }
+    if (rests.data.length > 0 && !menuForm.restaurant_id) setMenuForm(f => ({ ...f, restaurant_id: rests.data[0].id }));
+  };
+
+  const loadSettlements = async () => {
+    const res = await API.get('/api/settlements/restaurants');
+    setRestSettlements(res.data);
+  };
+
+  const loadTickets = async () => {
+    const res = await API.get('/api/tickets');
+    setTickets(res.data);
   };
 
   const uploadImage = async (file, type) => {
     const fd = new FormData();
     fd.append('image', file);
     const res = await API.post(`/api/upload/${type}`, fd);
-    return res.data.url;
+    return res.data;
   };
 
   const addRestaurant = async () => {
     if (!restForm.name || !restForm.category || !restForm.address) { alert('Fill all fields!'); return; }
     let image = restForm.image;
-    if (restImgRef.current?.files[0]) image = await uploadImage(restImgRef.current.files[0], 'restaurant');
+    if (restImgRef.current?.files[0]) { const r = await uploadImage(restImgRef.current.files[0], 'restaurant'); image = r.url; }
     await API.post('/api/restaurants/add', { ...restForm, image });
     setRestForm({ name: '', category: '', emoji: '🍽️', address: '', description: '', image: '', commission_percent: 15, phone: '', min_order: 0, delivery_charge: 0, opening_time: '09:00', closing_time: '23:00' });
     if (restImgRef.current) restImgRef.current.value = '';
@@ -63,51 +85,37 @@ export default function Admin() {
   const updateRestaurant = async () => {
     if (!editRest) return;
     let image = editRest.image;
-    if (restImgRef.current?.files[0]) image = await uploadImage(restImgRef.current.files[0], 'restaurant');
+    if (restImgRef.current?.files[0]) { const r = await uploadImage(restImgRef.current.files[0], 'restaurant'); image = r.url; }
     await API.post('/api/restaurants/update', { ...editRest, image });
     setEditRest(null);
     alert('✅ Restaurant updated!');
     loadAll();
   };
 
-  const toggleRestaurant = async (id, is_open) => {
-    await API.post('/api/restaurants/toggle', { id, is_open: is_open ? 0 : 1 });
-    loadAll();
-  };
+  const toggleRestaurant = async (id, is_open) => { await API.post('/api/restaurants/toggle', { id, is_open: is_open ? 0 : 1 }); loadAll(); };
 
   const addPortion = () => {
     if (!portionInput.name || !portionInput.price) { alert('Portion name and price dono bharo!'); return; }
     setPortions([...portions, { name: portionInput.name, price: parseInt(portionInput.price) }]);
     setPortionInput({ name: '', price: '' });
   };
-
   const removePortion = (i) => setPortions(portions.filter((_, idx) => idx !== i));
 
   const addMenuItem = async () => {
     if (!menuForm.restaurant_id || !menuForm.name) { alert('Fill all fields!'); return; }
     if (portions.length === 0 && !menuForm.price) { alert('Ya toh price daalo ya portions add karo!'); return; }
     let image = menuForm.image;
-    if (foodImgRef.current?.files[0]) image = await uploadImage(foodImgRef.current.files[0], 'food');
+    if (foodImgRef.current?.files[0]) { const r = await uploadImage(foodImgRef.current.files[0], 'food'); image = r.url; }
     const basePrice = portions.length > 0 ? portions[0].price : parseInt(menuForm.price);
-    await API.post('/api/menu/add', {
-      ...menuForm,
-      price: basePrice,
-      original_price: menuForm.original_price ? parseInt(menuForm.original_price) : null,
-      portions: portions.length > 0 ? portions : null,
-      image
-    });
-    setMenuForm(f => ({ ...f, category: '', name: '', price: '', original_price: '', description: '', image: '' }));
+    await API.post('/api/menu/add', { ...menuForm, price: basePrice, original_price: menuForm.original_price ? parseInt(menuForm.original_price) : null, portions: portions.length > 0 ? portions : null, image });
+    setMenuForm(f => ({ ...f, category: '', name: '', price: '', original_price: '', description: '', image: '', is_veg: 1 }));
     setPortions([]);
     if (foodImgRef.current) foodImgRef.current.value = '';
     alert('✅ Item added!');
     loadAll();
   };
 
-  const markNotifRead = async () => {
-    await API.post('/api/notifications/read');
-    setUnread(0);
-    loadAll();
-  };
+  const markNotifRead = async () => { await API.post('/api/notifications/read'); setUnread(0); loadAll(); };
 
   const addDeliveryBoy = async () => {
     if (!dboyForm.name || !dboyForm.phone) { alert('Naam aur phone zaroori hai!'); return; }
@@ -118,28 +126,75 @@ export default function Admin() {
     loadAll();
   };
 
+  const openAdvanceModal = async (d) => {
+    setAdvanceModal(d);
+    const res = await API.get(`/api/delivery-boys/${d.id}/advances`);
+    setAdvanceHistory(res.data);
+  };
+
   const giveAdvance = async () => {
     if (!advanceAmt || parseInt(advanceAmt) <= 0) { alert('Sahi amount daalo!'); return; }
-    await API.post('/api/delivery-boys/advance', { id: advanceModal.id, amount: parseInt(advanceAmt) });
-    setAdvanceModal(null);
-    setAdvanceAmt('');
+    await API.post('/api/delivery-boys/advance', { id: advanceModal.id, amount: parseInt(advanceAmt), note: advanceNote });
+    setAdvanceModal(null); setAdvanceAmt(''); setAdvanceNote('');
     alert('✅ Advance record ho gaya!');
     loadAll();
   };
 
-  const assignDelivery = async (order_id, delivery_boy_id) => {
-    await API.post('/api/orders/assign', { order_id, delivery_boy_id });
+  const confirmRemove = async () => {
+    await API.post('/api/delivery-boys/remove', { id: removeModal.id });
+    setRemoveModal(null);
+    alert('✅ Delivery boy remove ho gaya.');
     loadAll();
   };
 
-  const cancelOrder = async (id) => {
-    if (window.confirm('Order cancel karna hai?')) {
-      await API.post('/api/orders/cancel', { id });
-      loadAll();
-    }
+  const assignDelivery = async (order_id, delivery_boy_id) => { await API.post('/api/orders/assign', { order_id, delivery_boy_id }); loadAll(); };
+  const cancelOrder = async (id) => { if (window.confirm('Order cancel karna hai?')) { await API.post('/api/orders/cancel', { id }); loadAll(); } };
+  const logout = () => { localStorage.clear(); navigate('/login'); };
+
+  const formatTime = (dt) => dt ? new Date(dt + 'Z').toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '-';
+  const formatDate = (dt) => dt ? new Date(dt + 'Z').toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-';
+  const shiftDuration = (checkIn, checkOut) => {
+    if (!checkIn) return '-';
+    const start = new Date(checkIn + 'Z');
+    const end = checkOut ? new Date(checkOut + 'Z') : new Date();
+    const mins = Math.round((end - start) / 60000);
+    return `${Math.floor(mins / 60)}h ${mins % 60}m`;
   };
 
-  const logout = () => { localStorage.clear(); navigate('/login'); };
+  const payRestaurant = async () => {
+    if (!payAmt || parseInt(payAmt) <= 0) { alert('Sahi amount daalo!'); return; }
+    await API.post('/api/settlements/restaurant/pay', { restaurant_id: payRestModal.id, amount: parseInt(payAmt), note: payNote });
+    setPayRestModal(null); setPayAmt(''); setPayNote('');
+    alert('✅ Payment record ho gaya!');
+    loadSettlements();
+  };
+  const settleDelivery = async () => {
+    if (!settleAmt || parseInt(settleAmt) <= 0) { alert('Sahi amount daalo!'); return; }
+    await API.post('/api/delivery-boys/settle', { id: payDeliveryModal.id, amount: parseInt(settleAmt), note: settleNote });
+    setPayDeliveryModal(null); setSettleAmt(''); setSettleNote('');
+    alert('✅ Payout settle ho gaya!');
+    loadAll();
+  };
+
+  const sendReply = async () => {
+    if (!replyText.trim()) { alert('Reply likho!'); return; }
+    await API.post('/api/tickets/reply', { id: replyModal.id, reply: replyText });
+    setReplyModal(null); setReplyText('');
+    loadTickets();
+  };
+  const updateTicketStatus = async (id, status) => { await API.post('/api/tickets/status', { id, status }); loadTickets(); };
+
+  const filteredTickets = tickets.filter(t => ticketFilter === 'all' ? true : t.status === ticketFilter);
+
+  const addBanner = async () => {
+    if (!bannerForm.title) { alert('Title zaroori hai!'); return; }
+    if (!bannerFileRef.current?.files[0]) { alert('Photo ya video upload karo!'); return; }
+    const r = await uploadImage(bannerFileRef.current.files[0], 'banner');
+    await API.post('/api/banners/add', { ...bannerForm, image: r.url, is_video: r.is_video });
+    setBannerForm({ title: '', subtitle: '', button_text: 'Order Now', link: '' });
+    if (bannerFileRef.current) bannerFileRef.current.value = '';
+    loadAll();
+  };
 
   const pages = [
     { key: 'dashboard', icon: '📊', label: 'Dashboard' },
@@ -147,6 +202,8 @@ export default function Admin() {
     { key: 'restaurants', icon: '🏪', label: 'Restaurants' },
     { key: 'menu', icon: '🍽️', label: 'Menu' },
     { key: 'delivery', icon: '🛵', label: 'Delivery Boys' },
+    { key: 'settlements', icon: '💳', label: 'Settlements' },
+    { key: 'tickets', icon: '🎫', label: 'Support Tickets' },
     { key: 'applications', icon: '📝', label: 'Applications' },
     { key: 'banners', icon: '🎨', label: 'Banners' },
     { key: 'coupons', icon: '🎟️', label: 'Coupons' },
@@ -157,7 +214,6 @@ export default function Admin() {
 
   return (
     <div style={s.container}>
-      {/* Sidebar */}
       <div style={s.sidebar}>
         <div style={s.sidebarLogo}>
           <div style={s.logoText}>⚡ ZEPPO</div>
@@ -165,15 +221,14 @@ export default function Admin() {
         </div>
         {pages.map(p => (
           <div key={p.key} style={{ ...s.menuItem, ...(page === p.key ? s.menuActive : {}) }} onClick={() => setPage(p.key)}>
-            <span style={s.menuIcon}>{p.icon}</span>
-            <span>{p.label}</span>
+            <span style={s.menuIcon}>{p.icon}</span><span>{p.label}</span>
+            {p.key === 'tickets' && analytics.openTickets > 0 && <span style={s.sideBadge}>{analytics.openTickets}</span>}
           </div>
         ))}
         <div style={s.menuItem} onClick={() => navigate('/')}><span style={s.menuIcon}>🏠</span><span>Go to App</span></div>
         <div style={s.menuItem} onClick={logout}><span style={s.menuIcon}>🚪</span><span>Logout</span></div>
       </div>
 
-      {/* Main */}
       <div style={s.main}>
         <div style={s.topbar}>
           <h2 style={s.pageTitle}>{pages.find(p => p.key === page)?.label || page}</h2>
@@ -190,26 +245,105 @@ export default function Admin() {
             <div style={s.notifTitle}>Notifications</div>
             {data.notifications.slice(0, 10).map(n => (
               <div key={n.id} style={{ ...s.notifItem, background: n.is_read ? 'white' : '#fff3e0' }}>
-                <div style={s.notifMsg}>{n.title}</div>
-                <div style={s.notifSub}>{n.message}</div>
-                <div style={s.notifTime}>{n.created_at}</div>
+                <div style={s.notifMsg}>{n.title}</div><div style={s.notifSub}>{n.message}</div><div style={s.notifTime}>{n.created_at}</div>
               </div>
             ))}
           </div>
         )}
 
-        {/* Advance Modal */}
         {advanceModal && (
           <div style={s.modal}>
             <div style={s.modalBox}>
               <h3 style={s.modalTitle}>💰 Advance to {advanceModal.name}</h3>
-              <div style={{ fontSize: '13px', color: '#888', marginBottom: '15px' }}>
-                Net Balance: ₹{advanceModal.total_earned - advanceModal.advance_taken}
-              </div>
+              <div style={{ fontSize: '13px', color: '#888', marginBottom: '15px' }}>Net Balance: ₹{advanceModal.total_earned - advanceModal.advance_taken - (advanceModal.paid_out || 0)}</div>
               <input style={s.input} placeholder="Advance Amount (₹)" type="number" value={advanceAmt} onChange={e => setAdvanceAmt(e.target.value)} />
-              <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+              <input style={s.input} placeholder="Note (e.g. bike fuel, emergency)" value={advanceNote} onChange={e => setAdvanceNote(e.target.value)} />
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
                 <button style={s.btnGreen} onClick={giveAdvance}>Confirm Advance</button>
-                <button style={s.btnRed} onClick={() => { setAdvanceModal(null); setAdvanceAmt(''); }}>Cancel</button>
+                <button style={s.btnRed} onClick={() => { setAdvanceModal(null); setAdvanceAmt(''); setAdvanceNote(''); }}>Cancel</button>
+              </div>
+              {advanceHistory.length > 0 && (
+                <div>
+                  <div style={{ fontSize: '13px', fontWeight: '700', color: '#333', marginBottom: '8px' }}>History</div>
+                  {advanceHistory.map(h => (
+                    <div key={h.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#666', padding: '6px 0', borderBottom: '1px solid #f5f5f5' }}>
+                      <span>{h.note || 'Advance'}</span><span style={{ fontWeight: '700', color: '#e67e22' }}>₹{h.amount} · {formatDate(h.created_at)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {removeModal && (
+          <div style={s.modal}>
+            <div style={s.modalBox}>
+              <h3 style={s.modalTitle}>⚠️ Remove {removeModal.name}?</h3>
+              <div style={{ background: '#fff3e0', borderRadius: '10px', padding: '15px', marginBottom: '15px' }}>
+                <div style={{ fontSize: '13px', color: '#555', marginBottom: '6px' }}>Final Settlement</div>
+                <div style={{ fontSize: '20px', fontWeight: '800', color: '#0d6efd' }}>₹{removeModal.total_earned - removeModal.advance_taken - (removeModal.paid_out || 0)}</div>
+                <div style={{ fontSize: '12px', color: '#888', marginTop: '4px' }}>Net balance owed — pay before removing.</div>
+              </div>
+              <p style={{ fontSize: '13px', color: '#666', marginBottom: '15px' }}>Removing disables their login. Order/salary history stays on record.</p>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button style={s.btnRed} onClick={confirmRemove}>Confirm Remove</button>
+                <button style={s.btnConfirm} onClick={() => setRemoveModal(null)}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {payRestModal && (
+          <div style={s.modal}>
+            <div style={s.modalBox}>
+              <h3 style={s.modalTitle}>💳 Record Payment — {payRestModal.name}</h3>
+              <div style={{ fontSize: '13px', color: '#888', marginBottom: '15px' }}>Pending Commission: ₹{payRestModal.pending}</div>
+              <input style={s.input} placeholder="Amount Received (₹)" type="number" value={payAmt} onChange={e => setPayAmt(e.target.value)} />
+              <input style={s.input} placeholder="Note (optional)" value={payNote} onChange={e => setPayNote(e.target.value)} />
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button style={s.btnGreen} onClick={payRestaurant}>Confirm</button>
+                <button style={s.btnRed} onClick={() => { setPayRestModal(null); setPayAmt(''); setPayNote(''); }}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {payDeliveryModal && (
+          <div style={s.modal}>
+            <div style={s.modalBox}>
+              <h3 style={s.modalTitle}>💸 Settle Payout — {payDeliveryModal.name}</h3>
+              <div style={{ fontSize: '13px', color: '#888', marginBottom: '15px' }}>
+                Net Balance: ₹{payDeliveryModal.total_earned - payDeliveryModal.advance_taken - (payDeliveryModal.paid_out || 0)}
+              </div>
+              <input style={s.input} placeholder="Amount Paid (₹)" type="number" value={settleAmt} onChange={e => setSettleAmt(e.target.value)} />
+              <input style={s.input} placeholder="Note (optional)" value={settleNote} onChange={e => setSettleNote(e.target.value)} />
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button style={s.btnGreen} onClick={settleDelivery}>Confirm Payout</button>
+                <button style={s.btnRed} onClick={() => { setPayDeliveryModal(null); setSettleAmt(''); setSettleNote(''); }}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {replyModal && (
+          <div style={s.modal}>
+            <div style={s.modalBox}>
+              <h3 style={s.modalTitle}>🎫 {replyModal.subject}</h3>
+              <div style={{ background: '#f9f9f9', borderRadius: '10px', padding: '12px', marginBottom: '15px', fontSize: '13px', color: '#555' }}>
+                <div style={{ marginBottom: '4px' }}><strong>{replyModal.name}</strong> · {replyModal.phone} {replyModal.email ? `· ${replyModal.email}` : ''}</div>
+                {replyModal.message}
+              </div>
+              {replyModal.admin_reply && (
+                <div style={{ background: '#eff6ff', borderRadius: '10px', padding: '12px', marginBottom: '15px', fontSize: '13px', color: '#1e40af' }}>
+                  <strong>Previous reply:</strong> {replyModal.admin_reply}
+                </div>
+              )}
+              <textarea style={s.textarea} placeholder="Type your reply..." value={replyText} onChange={e => setReplyText(e.target.value)} />
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+                <button style={s.btnGreen} onClick={sendReply}>Send Reply</button>
+                <button style={s.btnConfirm} onClick={() => { updateTicketStatus(replyModal.id, 'resolved'); setReplyModal(null); }}>Mark Resolved</button>
+                <button style={s.btnRed} onClick={() => { setReplyModal(null); setReplyText(''); }}>Close</button>
               </div>
             </div>
           </div>
@@ -230,46 +364,29 @@ export default function Admin() {
                   { label: 'Total Users', value: analytics.totalUsers || 0, icon: '👥', color: '#e0f7fa' },
                   { label: 'ZEPPO Commission', value: '₹' + (analytics.totalCommission || 0), icon: '💸', color: '#fff9c4' },
                   { label: 'Pending Delivery Payout', value: '₹' + (analytics.totalPendingPayout || 0), icon: '🛵', color: '#ffe0b2' },
+                  { label: 'Open Support Tickets', value: analytics.openTickets || 0, icon: '🎫', color: '#fce4ec' },
                 ].map(card => (
                   <div key={card.label} style={s.statCard}>
-                    <div>
-                      <div style={s.statLabel}>{card.label}</div>
-                      <div style={s.statValue}>{card.value}</div>
-                    </div>
+                    <div><div style={s.statLabel}>{card.label}</div><div style={s.statValue}>{card.value}</div></div>
                     <div style={{ ...s.statIcon, background: card.color }}>{card.icon}</div>
                   </div>
                 ))}
               </div>
-
               <div style={s.tableCard}>
                 <h3 style={s.tableTitle}>🏆 Top Restaurants by Orders</h3>
                 <table style={s.table}>
                   <thead><tr>{['Restaurant', 'Orders', 'Revenue'].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
-                  <tbody>
-                    {(analytics.topRestaurants || []).map((r, i) => (
-                      <tr key={i}>
-                        <td style={s.td}>{r.restaurant_name}</td>
-                        <td style={s.td}>{r.orders}</td>
-                        <td style={s.td}>₹{r.revenue}</td>
-                      </tr>
-                    ))}
-                  </tbody>
+                  <tbody>{(analytics.topRestaurants || []).map((r, i) => (<tr key={i}><td style={s.td}>{r.restaurant_name}</td><td style={s.td}>{r.orders}</td><td style={s.td}>₹{r.revenue}</td></tr>))}</tbody>
                 </table>
               </div>
-
               <div style={s.tableCard}>
                 <h3 style={s.tableTitle}>📦 Recent Orders</h3>
                 <table style={s.table}>
                   <thead><tr>{['Customer', 'Restaurant', 'Total', 'Payment', 'Status'].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
                   <tbody>
                     {data.orders.slice(0, 5).map(o => (
-                      <tr key={o.id}>
-                        <td style={s.td}>{o.customer_name}</td>
-                        <td style={s.td}>{o.restaurant_name}</td>
-                        <td style={s.td}>₹{o.total}</td>
-                        <td style={s.td}>{o.payment_method === 'upi' ? '💳 UPI' : '💵 Cash'}</td>
-                        <td style={s.td}><span style={{ ...s.badge2, ...getBadge(o.status) }}>{o.status}</span></td>
-                      </tr>
+                      <tr key={o.id}><td style={s.td}>{o.customer_name}</td><td style={s.td}>{o.restaurant_name}</td><td style={s.td}>₹{o.total}</td>
+                        <td style={s.td}>{o.payment_method === 'upi' ? '💳 UPI' : '💵 Cash'}</td><td style={s.td}><span style={{ ...s.badge2, ...getBadge(o.status) }}>{o.status}</span></td></tr>
                     ))}
                   </tbody>
                 </table>
@@ -286,32 +403,23 @@ export default function Admin() {
                 <tbody>
                   {data.orders.map(o => (
                     <tr key={o.id}>
-                      <td style={s.td}>#{o.id}</td>
-                      <td style={s.td}>{o.customer_name}</td>
-                      <td style={s.td}>{o.customer_phone}</td>
-                      <td style={s.td}>{o.restaurant_name}</td>
-                      <td style={s.td}>₹{o.total}</td>
+                      <td style={s.td}>#{o.id}</td><td style={s.td}>{o.customer_name}</td><td style={s.td}>{o.customer_phone}</td>
+                      <td style={s.td}>{o.restaurant_name}</td><td style={s.td}>₹{o.total}</td>
                       <td style={s.td}><span style={{ ...s.badge2, ...getBadge(o.status) }}>{o.status}</span></td>
                       <td style={s.td}>
                         {o.status !== 'delivered' && o.status !== 'cancelled' ? (
-                          <select style={{ ...s.input, marginBottom: 0, padding: '5px', fontSize: '12px' }}
-                            value={o.delivery_boy_id || ''}
-                            onChange={e => assignDelivery(o.id, e.target.value)}>
+                          <select style={{ ...s.input, marginBottom: 0, padding: '5px', fontSize: '12px' }} value={o.delivery_boy_id || ''} onChange={e => assignDelivery(o.id, e.target.value)}>
                             <option value="">-- Assign --</option>
-                            {data.deliveryBoys.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                            {data.deliveryBoys.map(d => <option key={d.id} value={d.id}>{d.is_online ? '🟢' : '⚪'} {d.name}</option>)}
                           </select>
-                        ) : (
-                          data.deliveryBoys.find(d => d.id === o.delivery_boy_id)?.name || '-'
-                        )}
+                        ) : (data.deliveryBoys.find(d => d.id === o.delivery_boy_id)?.name || '-')}
                       </td>
                       <td style={s.td}>
                         {o.status === 'pending' && <button style={s.btnConfirm} onClick={() => { API.post('/api/orders/status', { id: o.id, status: 'confirmed' }); loadAll(); }}>Confirm</button>}
                         {o.status === 'confirmed' && <button style={s.btnPurple} onClick={() => { API.post('/api/orders/status', { id: o.id, status: 'preparing' }); loadAll(); }}>Preparing</button>}
                         {o.status === 'preparing' && <button style={s.btnBlue} onClick={() => { API.post('/api/orders/status', { id: o.id, status: 'on_the_way' }); loadAll(); }}>On Way</button>}
                         {o.status === 'on_the_way' && <button style={s.btnGreen} onClick={() => { API.post('/api/orders/status', { id: o.id, status: 'delivered' }); loadAll(); }}>Delivered</button>}
-                        {(o.status === 'pending' || o.status === 'confirmed') && (
-                          <button style={{ ...s.btnRed, marginLeft: '5px' }} onClick={() => cancelOrder(o.id)}>Cancel</button>
-                        )}
+                        {(o.status === 'pending' || o.status === 'confirmed') && <button style={{ ...s.btnRed, marginLeft: '5px' }} onClick={() => cancelOrder(o.id)}>Cancel</button>}
                       </td>
                     </tr>
                   ))}
@@ -337,14 +445,8 @@ export default function Admin() {
                       <input style={s.input} placeholder="Min Order (₹)" type="number" value={editRest.min_order ?? 0} onChange={e => setEditRest({ ...editRest, min_order: e.target.value })} />
                       <input style={s.input} placeholder="Delivery Charge (₹)" type="number" value={editRest.delivery_charge ?? 0} onChange={e => setEditRest({ ...editRest, delivery_charge: e.target.value })} />
                       <div />
-                      <div>
-                        <label style={s.uploadLabel}>Opening Time</label>
-                        <input style={s.input} type="time" value={editRest.opening_time || '09:00'} onChange={e => setEditRest({ ...editRest, opening_time: e.target.value })} />
-                      </div>
-                      <div>
-                        <label style={s.uploadLabel}>Closing Time</label>
-                        <input style={s.input} type="time" value={editRest.closing_time || '23:00'} onChange={e => setEditRest({ ...editRest, closing_time: e.target.value })} />
-                      </div>
+                      <div><label style={s.uploadLabel}>Opening Time</label><input style={s.input} type="time" value={editRest.opening_time || '09:00'} onChange={e => setEditRest({ ...editRest, opening_time: e.target.value })} /></div>
+                      <div><label style={s.uploadLabel}>Closing Time</label><input style={s.input} type="time" value={editRest.closing_time || '23:00'} onChange={e => setEditRest({ ...editRest, closing_time: e.target.value })} /></div>
                     </div>
                     <textarea style={s.textarea} placeholder="Description" value={editRest.description || ''} onChange={e => setEditRest({ ...editRest, description: e.target.value })} />
                     <label style={s.uploadLabel}>📷 Change Logo/Image:</label>
@@ -357,7 +459,6 @@ export default function Admin() {
                   </div>
                 </div>
               )}
-
               <div style={s.formCard}>
                 <h3 style={s.tableTitle}>➕ Add New Restaurant</h3>
                 <div style={s.formGrid}>
@@ -369,21 +470,14 @@ export default function Admin() {
                   <input style={s.input} placeholder="Commission % (default 15)" type="number" value={restForm.commission_percent} onChange={e => setRestForm({ ...restForm, commission_percent: e.target.value })} />
                   <input style={s.input} placeholder="Min Order Value (₹)" type="number" value={restForm.min_order} onChange={e => setRestForm({ ...restForm, min_order: e.target.value })} />
                   <input style={s.input} placeholder="Delivery Charge (₹, 0 = free)" type="number" value={restForm.delivery_charge} onChange={e => setRestForm({ ...restForm, delivery_charge: e.target.value })} />
-                  <div>
-                    <label style={s.uploadLabel}>Opening Time</label>
-                    <input style={s.input} type="time" value={restForm.opening_time} onChange={e => setRestForm({ ...restForm, opening_time: e.target.value })} />
-                  </div>
-                  <div>
-                    <label style={s.uploadLabel}>Closing Time</label>
-                    <input style={s.input} type="time" value={restForm.closing_time} onChange={e => setRestForm({ ...restForm, closing_time: e.target.value })} />
-                  </div>
+                  <div><label style={s.uploadLabel}>Opening Time</label><input style={s.input} type="time" value={restForm.opening_time} onChange={e => setRestForm({ ...restForm, opening_time: e.target.value })} /></div>
+                  <div><label style={s.uploadLabel}>Closing Time</label><input style={s.input} type="time" value={restForm.closing_time} onChange={e => setRestForm({ ...restForm, closing_time: e.target.value })} /></div>
                 </div>
                 <textarea style={s.textarea} placeholder="Description" value={restForm.description} onChange={e => setRestForm({ ...restForm, description: e.target.value })} />
                 <label style={s.uploadLabel}>📷 Restaurant Logo/Image:</label>
                 <input type="file" ref={restImgRef} accept="image/*" style={s.fileInput} />
                 <button style={s.btnOrange} onClick={addRestaurant}>➕ Add Restaurant</button>
               </div>
-
               <div style={s.tableCard}>
                 <h3 style={s.tableTitle}>🏪 All Restaurants</h3>
                 <table style={s.table}>
@@ -391,24 +485,14 @@ export default function Admin() {
                   <tbody>
                     {data.restaurants.map(r => (
                       <tr key={r.id}>
-                        <td style={s.td}>
-                          {r.image ? <img src={r.image} alt="" style={s.thumbImg} /> : <span style={{ fontSize: '30px' }}>{r.emoji}</span>}
-                        </td>
+                        <td style={s.td}>{r.image ? <img src={r.image} alt="" style={s.thumbImg} /> : <span style={{ fontSize: '30px' }}>{r.emoji}</span>}</td>
                         <td style={s.td}><strong>{r.name}</strong><div style={{ fontSize: '12px', color: '#888' }}>{r.phone}</div></td>
-                        <td style={s.td}>{r.category}</td>
-                        <td style={s.td}>{r.commission_percent || 15}%</td>
-                        <td style={s.td}>₹{r.min_order || 0}</td>
-                        <td style={s.td}>⭐ {r.rating}</td>
-                        <td style={s.td}>
-                          <span style={{ ...s.badge2, background: r.is_open ? '#d1e7dd' : '#f8d7da', color: r.is_open ? '#0a3622' : '#842029' }}>
-                            {r.is_open ? 'Open' : 'Closed'}
-                          </span>
-                        </td>
+                        <td style={s.td}>{r.category}</td><td style={s.td}>{r.commission_percent || 15}%</td>
+                        <td style={s.td}>₹{r.min_order || 0}</td><td style={s.td}>⭐ {r.rating}</td>
+                        <td style={s.td}><span style={{ ...s.badge2, background: r.is_open ? '#d1e7dd' : '#f8d7da', color: r.is_open ? '#0a3622' : '#842029' }}>{r.is_open ? 'Open' : 'Closed'}</span></td>
                         <td style={s.td}>
                           <button style={s.btnConfirm} onClick={() => setEditRest(r)}>Edit</button>
-                          <button style={{ ...s.btnConfirm, background: r.is_open ? '#f8d7da' : '#d1e7dd', color: r.is_open ? '#842029' : '#0a3622', marginLeft: '5px' }} onClick={() => toggleRestaurant(r.id, r.is_open)}>
-                            {r.is_open ? 'Close' : 'Open'}
-                          </button>
+                          <button style={{ ...s.btnConfirm, background: r.is_open ? '#f8d7da' : '#d1e7dd', color: r.is_open ? '#842029' : '#0a3622', marginLeft: '5px' }} onClick={() => toggleRestaurant(r.id, r.is_open)}>{r.is_open ? 'Close' : 'Open'}</button>
                           <button style={{ ...s.btnRed, marginLeft: '5px' }} onClick={() => { if (window.confirm('Delete?')) { API.post('/api/restaurants/delete', { id: r.id }); loadAll(); } }}>Del</button>
                         </td>
                       </tr>
@@ -433,16 +517,14 @@ export default function Admin() {
                   <input style={s.input} placeholder="Item Name *" value={menuForm.name} onChange={e => setMenuForm({ ...menuForm, name: e.target.value })} />
                   <input style={s.input} placeholder="Description" value={menuForm.description} onChange={e => setMenuForm({ ...menuForm, description: e.target.value })} />
                 </div>
-
                 {portions.length === 0 && (
                   <div style={s.formGrid}>
                     <input style={s.input} placeholder="Price (₹) — if single size" type="number" value={menuForm.price} onChange={e => setMenuForm({ ...menuForm, price: e.target.value })} />
                     <input style={s.input} placeholder="Original Price (₹) — optional" type="number" value={menuForm.original_price} onChange={e => setMenuForm({ ...menuForm, original_price: e.target.value })} />
                   </div>
                 )}
-
                 <div style={s.portionBox}>
-                  <label style={s.uploadLabel}>🍛 Portion Sizes (Half/Full/Qtr/Pcs) — optional, leave blank for single price</label>
+                  <label style={s.uploadLabel}>🍛 Portion Sizes — optional</label>
                   <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
                     <input style={{ ...s.input, marginBottom: 0, flex: 1 }} placeholder="e.g. Half" value={portionInput.name} onChange={e => setPortionInput({ ...portionInput, name: e.target.value })} />
                     <input style={{ ...s.input, marginBottom: 0, width: '100px' }} placeholder="Price" type="number" value={portionInput.price} onChange={e => setPortionInput({ ...portionInput, price: e.target.value })} />
@@ -450,20 +532,18 @@ export default function Admin() {
                   </div>
                   {portions.length > 0 && (
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                      {portions.map((p, i) => (
-                        <div key={i} style={s.portionChip}>
-                          {p.name} — ₹{p.price} <span style={{ cursor: 'pointer', color: '#e74c3c', marginLeft: '6px' }} onClick={() => removePortion(i)}>✕</span>
-                        </div>
-                      ))}
+                      {portions.map((p, i) => <div key={i} style={s.portionChip}>{p.name} — ₹{p.price} <span style={{ cursor: 'pointer', color: '#e74c3c', marginLeft: '6px' }} onClick={() => removePortion(i)}>✕</span></div>)}
                     </div>
                   )}
                 </div>
-
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '12px' }}>
+                  <div onClick={() => setMenuForm({ ...menuForm, is_veg: 1 })} style={{ flex: 1, padding: '12px', borderRadius: '8px', textAlign: 'center', cursor: 'pointer', fontSize: '13px', fontWeight: '700', border: menuForm.is_veg === 1 ? '2px solid #27ae60' : '1px solid #e0e0e0', background: menuForm.is_veg === 1 ? '#e8f5e9' : 'white', color: menuForm.is_veg === 1 ? '#0a3622' : '#888' }}>🟢 Veg</div>
+                  <div onClick={() => setMenuForm({ ...menuForm, is_veg: 0 })} style={{ flex: 1, padding: '12px', borderRadius: '8px', textAlign: 'center', cursor: 'pointer', fontSize: '13px', fontWeight: '700', border: menuForm.is_veg === 0 ? '2px solid #e74c3c' : '1px solid #e0e0e0', background: menuForm.is_veg === 0 ? '#fce4ec' : 'white', color: menuForm.is_veg === 0 ? '#842029' : '#888' }}>🔴 Non-Veg</div>
+                </div>
                 <label style={s.uploadLabel}>🍽️ Food Photo:</label>
                 <input type="file" ref={foodImgRef} accept="image/*" style={s.fileInput} />
                 <button style={s.btnOrange} onClick={addMenuItem}>➕ Add Item</button>
               </div>
-
               <div style={s.tableCard}>
                 <h3 style={s.tableTitle}>🍽️ Menu by Restaurant</h3>
                 <MenuTable restaurants={data.restaurants} reload={loadAll} />
@@ -483,36 +563,122 @@ export default function Admin() {
                   <input style={s.input} placeholder="Login Password (optional)" type="password" value={dboyForm.password} onChange={e => setDboyForm({ ...dboyForm, password: e.target.value })} />
                   <input style={s.input} placeholder="Salary per delivery (₹)" type="number" value={dboyForm.salary_per_delivery} onChange={e => setDboyForm({ ...dboyForm, salary_per_delivery: e.target.value })} />
                 </div>
-                <div style={{ fontSize: '12px', color: '#888', marginBottom: '10px' }}>💡 Email/Password doge toh delivery boy khud app mein login karke apne orders dekh sakega.</div>
                 <button style={s.btnOrange} onClick={addDeliveryBoy}>➕ Add Delivery Boy</button>
               </div>
-
               <div style={s.tableCard}>
                 <h3 style={s.tableTitle}>🛵 Delivery Boys — Salary & Stats</h3>
                 <table style={s.table}>
-                  <thead><tr>{['Name', 'Phone', 'Salary/Delivery', 'Deliveries', 'Total Earned', 'Advance Taken', 'Net Balance', 'Action'].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                  <thead><tr>{['Status', 'Name', 'Phone', 'Salary/Delivery', 'Deliveries', 'Total Earned', 'Advance', 'Paid Out', 'Net Balance', 'Action'].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
                   <tbody>
                     {data.deliveryBoys.map(d => (
                       <tr key={d.id}>
+                        <td style={s.td}><span style={{ ...s.badge2, background: d.is_online ? '#d1e7dd' : '#f0f0f0', color: d.is_online ? '#0a3622' : '#888' }}>{d.is_online ? '🟢' : '⚪'}</span></td>
                         <td style={s.td}><strong>{d.name}</strong>{d.user_id && <div style={{ fontSize: '11px', color: '#27ae60' }}>✅ Has Login</div>}</td>
                         <td style={s.td}>{d.phone}</td>
-                        <td style={s.td}>
-                          <input
-                            type="number"
-                            defaultValue={d.salary_per_delivery}
-                            style={{ ...s.input, width: '80px', padding: '5px', marginBottom: 0 }}
-                            onBlur={e => API.post('/api/delivery-boys/salary', { id: d.id, salary_per_delivery: e.target.value })}
-                          />
-                        </td>
+                        <td style={s.td}><input type="number" defaultValue={d.salary_per_delivery} style={{ ...s.input, width: '70px', padding: '5px', marginBottom: 0 }} onBlur={e => API.post('/api/delivery-boys/salary', { id: d.id, salary_per_delivery: e.target.value })} /></td>
                         <td style={s.td}>{d.total_deliveries}</td>
                         <td style={{ ...s.td, color: '#27ae60', fontWeight: '700' }}>₹{d.total_earned}</td>
                         <td style={{ ...s.td, color: '#e67e22', fontWeight: '700' }}>₹{d.advance_taken || 0}</td>
-                        <td style={{ ...s.td, color: '#0d6efd', fontWeight: '700' }}>₹{d.total_earned - (d.advance_taken || 0)}</td>
-                        <td style={s.td}><button style={s.btnConfirm} onClick={() => setAdvanceModal(d)}>💰 Advance</button></td>
+                        <td style={{ ...s.td, color: '#6f42c1', fontWeight: '700' }}>₹{d.paid_out || 0}</td>
+                        <td style={{ ...s.td, color: '#0d6efd', fontWeight: '700' }}>₹{d.total_earned - (d.advance_taken || 0) - (d.paid_out || 0)}</td>
+                        <td style={s.td}>
+                          <button style={s.btnConfirm} onClick={() => openAdvanceModal(d)}>💰 Advance</button>
+                          <button style={{ ...s.btnRed, marginLeft: '5px' }} onClick={() => setRemoveModal(d)}>🗑️</button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+              </div>
+              <div style={s.tableCard}>
+                <h3 style={s.tableTitle}>🕐 Today's Online/Offline Log</h3>
+                {data.shifts.length === 0 ? <p style={{ color: '#aaa', fontSize: '14px' }}>No shifts recorded today yet.</p> : (
+                  <table style={s.table}>
+                    <thead><tr>{['Delivery Boy', 'Check In', 'Check Out', 'Duration'].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                    <tbody>{data.shifts.map(sh => (<tr key={sh.id}><td style={s.td}>{sh.delivery_boy_name}</td><td style={s.td}>{formatTime(sh.check_in)}</td><td style={s.td}>{sh.check_out ? formatTime(sh.check_out) : <span style={{ color: '#27ae60', fontWeight: '600' }}>Still Online</span>}</td><td style={s.td}>{shiftDuration(sh.check_in, sh.check_out)}</td></tr>))}</tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* SETTLEMENTS */}
+          {page === 'settlements' && (
+            <div>
+              <div style={s.tableCard}>
+                <h3 style={s.tableTitle}>🏪 Restaurant Commission Settlements</h3>
+                <p style={{ fontSize: '12px', color: '#888', marginBottom: '15px' }}>Commission ZEPPO earns on each delivered order.</p>
+                <table style={s.table}>
+                  <thead><tr>{['Restaurant', 'Orders', 'Revenue', 'Commission %', 'Total Owed', 'Settled', 'Pending', 'Action'].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                  <tbody>
+                    {restSettlements.map(r => (
+                      <tr key={r.id}>
+                        <td style={s.td}>{r.emoji} <strong>{r.name}</strong></td>
+                        <td style={s.td}>{r.orders}</td>
+                        <td style={s.td}>₹{r.revenue}</td>
+                        <td style={s.td}>{r.commission_percent}%</td>
+                        <td style={{ ...s.td, fontWeight: '700' }}>₹{r.totalCommission}</td>
+                        <td style={{ ...s.td, color: '#27ae60' }}>₹{r.settled}</td>
+                        <td style={{ ...s.td, color: r.pending > 0 ? '#e74c3c' : '#27ae60', fontWeight: '700' }}>₹{r.pending}</td>
+                        <td style={s.td}>
+                          {r.pending > 0 ? <button style={s.btnConfirm} onClick={() => setPayRestModal(r)}>Record Payment</button> : <span style={{ fontSize: '12px', color: '#27ae60' }}>✅ Settled</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div style={s.tableCard}>
+                <h3 style={s.tableTitle}>🛵 Delivery Boy Payouts</h3>
+                <table style={s.table}>
+                  <thead><tr>{['Name', 'Total Earned', 'Advance', 'Paid Out', 'Net Balance', 'Action'].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                  <tbody>
+                    {data.deliveryBoys.map(d => {
+                      const net = d.total_earned - (d.advance_taken || 0) - (d.paid_out || 0);
+                      return (
+                        <tr key={d.id}>
+                          <td style={s.td}><strong>{d.name}</strong></td>
+                          <td style={{ ...s.td, color: '#27ae60' }}>₹{d.total_earned}</td>
+                          <td style={{ ...s.td, color: '#e67e22' }}>₹{d.advance_taken || 0}</td>
+                          <td style={{ ...s.td, color: '#6f42c1' }}>₹{d.paid_out || 0}</td>
+                          <td style={{ ...s.td, fontWeight: '700', color: net > 0 ? '#0d6efd' : '#27ae60' }}>₹{net}</td>
+                          <td style={s.td}>
+                            {net > 0 ? <button style={s.btnConfirm} onClick={() => setPayDeliveryModal(d)}>Settle Payout</button> : <span style={{ fontSize: '12px', color: '#27ae60' }}>✅ Settled</span>}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* SUPPORT TICKETS */}
+          {page === 'tickets' && (
+            <div>
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '15px' }}>
+                {['open', 'in_progress', 'resolved', 'all'].map(f => (
+                  <div key={f} onClick={() => setTicketFilter(f)} style={{ padding: '8px 16px', borderRadius: '20px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', background: ticketFilter === f ? '#ff6b00' : 'white', color: ticketFilter === f ? 'white' : '#555', border: '1px solid #e0e0e0', textTransform: 'capitalize' }}>
+                    {f.replace('_', ' ')}
+                  </div>
+                ))}
+              </div>
+              <div style={s.tableCard}>
+                <h3 style={s.tableTitle}>🎫 Support Tickets ({filteredTickets.length})</h3>
+                {filteredTickets.length === 0 ? <p style={{ color: '#aaa', fontSize: '14px' }}>No tickets here.</p> : (
+                  filteredTickets.map(t => (
+                    <div key={t.id} style={{ background: '#fafafa', borderRadius: '12px', padding: '15px', marginBottom: '10px', border: '1px solid #f0f0f0', cursor: 'pointer' }} onClick={() => { setReplyModal(t); setReplyText(t.admin_reply || ''); }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                        <strong style={{ fontSize: '14px' }}>{t.subject}</strong>
+                        <span style={{ ...s.badge2, ...(t.status === 'open' ? { background: '#fce4ec', color: '#c62828' } : t.status === 'in_progress' ? { background: '#fff3cd', color: '#856404' } : { background: '#d1e7dd', color: '#0a3622' }) }}>{t.status.replace('_', ' ')}</span>
+                      </div>
+                      <div style={{ fontSize: '13px', color: '#666', marginBottom: '6px' }}>{t.message.slice(0, 100)}{t.message.length > 100 ? '...' : ''}</div>
+                      <div style={{ fontSize: '12px', color: '#999' }}>{t.name} · {t.phone} · {formatDate(t.created_at)}</div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           )}
@@ -522,17 +688,12 @@ export default function Admin() {
             <div style={s.tableCard}>
               <h3 style={s.tableTitle}>📝 Delivery Applications</h3>
               <table style={s.table}>
-                <thead><tr>{['Name', 'Father', 'Phone', 'Aadhar', 'Address', 'Bike', 'Education', 'Status', 'Action'].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                <thead><tr>{['Name', 'Father', 'Phone', 'Aadhar', 'Address', 'Bike', 'Status', 'Action'].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
                 <tbody>
                   {data.applications.map(a => (
                     <tr key={a.id}>
-                      <td style={s.td}>{a.full_name}</td>
-                      <td style={s.td}>{a.father_name}</td>
-                      <td style={s.td}>{a.phone}</td>
-                      <td style={s.td}>{a.aadhar}</td>
-                      <td style={s.td}>{a.address}</td>
-                      <td style={s.td}>{a.has_bike}</td>
-                      <td style={s.td}>{a.education}</td>
+                      <td style={s.td}>{a.full_name}</td><td style={s.td}>{a.father_name}</td><td style={s.td}>{a.phone}</td>
+                      <td style={s.td}>{a.aadhar}</td><td style={s.td}>{a.address}</td><td style={s.td}>{a.has_bike}</td>
                       <td style={s.td}><span style={{ ...s.badge2, ...getBadge(a.status) }}>{a.status}</span></td>
                       <td style={s.td}>
                         <button style={s.btnGreen} onClick={() => { API.post('/api/application/status', { id: a.id, status: 'approved' }); loadAll(); }}>✅</button>
@@ -542,7 +703,6 @@ export default function Admin() {
                   ))}
                 </tbody>
               </table>
-              <div style={{ fontSize: '12px', color: '#888', marginTop: '10px' }}>💡 Approve karne ke baad, "Delivery Boys" tab mein jaake unko login credentials ke saath add karo.</div>
             </div>
           )}
 
@@ -553,23 +713,33 @@ export default function Admin() {
                 <h3 style={s.tableTitle}>➕ Add Banner</h3>
                 <input style={s.input} placeholder="Title *" value={bannerForm.title} onChange={e => setBannerForm({ ...bannerForm, title: e.target.value })} />
                 <input style={s.input} placeholder="Subtitle" value={bannerForm.subtitle} onChange={e => setBannerForm({ ...bannerForm, subtitle: e.target.value })} />
-                <input style={s.input} placeholder="Button Text" value={bannerForm.button_text} onChange={e => setBannerForm({ ...bannerForm, button_text: e.target.value })} />
-                <button style={s.btnOrange} onClick={async () => {
-                  await API.post('/api/banners/add', bannerForm);
-                  setBannerForm({ title: '', subtitle: '', button_text: 'Order Now' });
-                  loadAll();
-                }}>➕ Add Banner</button>
+                <input style={s.input} placeholder="Button Text (e.g. Order Now)" value={bannerForm.button_text} onChange={e => setBannerForm({ ...bannerForm, button_text: e.target.value })} />
+                <input style={s.input} placeholder="Link when tapped (e.g. /order/3 or /stores)" value={bannerForm.link} onChange={e => setBannerForm({ ...bannerForm, link: e.target.value })} />
+                <div style={{ fontSize: '12px', color: '#888', marginBottom: '12px' }}>
+                  💡 Examples: <code>/stores</code> (all stores) · <code>/order/5</code> (specific restaurant, use its ID) · leave blank for no action.
+                </div>
+                <label style={s.uploadLabel}>🖼️ Banner Photo or Video:</label>
+                <input type="file" ref={bannerFileRef} accept="image/*,video/*" style={s.fileInput} />
+                <button style={s.btnOrange} onClick={addBanner}>➕ Add Banner</button>
               </div>
               <div style={s.tableCard}>
                 <h3 style={s.tableTitle}>🎨 Active Banners</h3>
+                {data.banners.length === 0 && <p style={{ color: '#aaa', fontSize: '14px' }}>No banners yet — add one above!</p>}
                 {data.banners.map(b => (
-                  <div key={b.id} style={{ background: 'linear-gradient(135deg, #1a1a2e, #16213e)', borderRadius: '12px', padding: '20px', marginBottom: '10px', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <div style={{ fontSize: '16px', fontWeight: '700' }}>{b.title}</div>
-                      <div style={{ fontSize: '13px', opacity: '0.8' }}>{b.subtitle}</div>
-                      <div style={{ background: '#ff6b00', padding: '5px 15px', borderRadius: '20px', fontSize: '12px', display: 'inline-block', marginTop: '8px' }}>{b.button_text}</div>
+                  <div key={b.id} style={{ borderRadius: '12px', marginBottom: '10px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+                    <div style={{ position: 'relative', minHeight: '140px', background: '#1a1a2e' }}>
+                      {b.is_video ? (
+                        <video src={b.image} muted loop autoPlay playsInline style={{ width: '100%', height: '140px', objectFit: 'cover' }} />
+                      ) : (
+                        <img src={b.image} alt="" style={{ width: '100%', height: '140px', objectFit: 'cover' }} />
+                      )}
+                      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)', padding: '16px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+                        <div style={{ fontSize: '16px', fontWeight: '700', color: 'white' }}>{b.title}</div>
+                        <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.85)' }}>{b.subtitle}</div>
+                        <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', marginTop: '4px' }}>Link: {b.link || '(none)'} {b.is_video ? '· 🎥 Video' : ''}</div>
+                      </div>
+                      <button style={{ ...s.btnRed, position: 'absolute', top: '10px', right: '10px' }} onClick={() => { API.post('/api/banners/delete', { id: b.id }); loadAll(); }}>Delete</button>
                     </div>
-                    <button style={s.btnRed} onClick={() => { API.post('/api/banners/delete', { id: b.id }); loadAll(); }}>Delete</button>
                   </div>
                 ))}
               </div>
@@ -585,16 +755,11 @@ export default function Admin() {
                   <input style={s.input} placeholder="Coupon Code (e.g. SAVE50) *" value={couponForm.code} onChange={e => setCouponForm({ ...couponForm, code: e.target.value.toUpperCase() })} />
                   <input style={s.input} placeholder="Discount *" type="number" value={couponForm.discount} onChange={e => setCouponForm({ ...couponForm, discount: e.target.value })} />
                   <select style={s.input} value={couponForm.type} onChange={e => setCouponForm({ ...couponForm, type: e.target.value })}>
-                    <option value="flat">Flat (₹)</option>
-                    <option value="percent">Percent (%)</option>
+                    <option value="flat">Flat (₹)</option><option value="percent">Percent (%)</option>
                   </select>
                   <input style={s.input} placeholder="Min Order (₹)" type="number" value={couponForm.min_order} onChange={e => setCouponForm({ ...couponForm, min_order: e.target.value })} />
                 </div>
-                <button style={s.btnOrange} onClick={async () => {
-                  await API.post('/api/coupons/add', couponForm);
-                  setCouponForm({ code: '', discount: '', type: 'flat', min_order: 0 });
-                  loadAll();
-                }}>➕ Add Coupon</button>
+                <button style={s.btnOrange} onClick={async () => { await API.post('/api/coupons/add', couponForm); setCouponForm({ code: '', discount: '', type: 'flat', min_order: 0 }); loadAll(); }}>➕ Add Coupon</button>
               </div>
               <div style={s.tableCard}>
                 <h3 style={s.tableTitle}>🎟️ Active Coupons</h3>
@@ -605,8 +770,7 @@ export default function Admin() {
                       <tr key={c.id}>
                         <td style={s.td}><strong style={{ color: '#ff6b00' }}>{c.code}</strong></td>
                         <td style={s.td}>{c.type === 'percent' ? c.discount + '%' : '₹' + c.discount}</td>
-                        <td style={s.td}>{c.type}</td>
-                        <td style={s.td}>₹{c.min_order}</td>
+                        <td style={s.td}>{c.type}</td><td style={s.td}>₹{c.min_order}</td>
                         <td style={s.td}><button style={s.btnRed} onClick={() => { API.post('/api/coupons/delete', { id: c.id }); loadAll(); }}>Delete</button></td>
                       </tr>
                     ))}
@@ -625,10 +789,7 @@ export default function Admin() {
                 <tbody>
                   {data.users.map(u => (
                     <tr key={u.id}>
-                      <td style={s.td}>#{u.id}</td>
-                      <td style={s.td}>{u.name}</td>
-                      <td style={s.td}>{u.email}</td>
-                      <td style={s.td}>{u.phone}</td>
+                      <td style={s.td}>#{u.id}</td><td style={s.td}>{u.name}</td><td style={s.td}>{u.email}</td><td style={s.td}>{u.phone}</td>
                       <td style={s.td}><span style={{ ...s.badge2, background: u.role === 'admin' ? '#cfe2ff' : u.role === 'delivery' ? '#ffe0b2' : '#f0f0f0', color: u.role === 'admin' ? '#084298' : u.role === 'delivery' ? '#e65100' : '#333' }}>{u.role}</span></td>
                       <td style={s.td}>{u.created_at}</td>
                     </tr>
@@ -644,55 +805,26 @@ export default function Admin() {
   );
 }
 
-// Menu Table Component — with Edit
 function MenuTable({ restaurants, reload }) {
   const [menuData, setMenuData] = useState({});
   const [editItem, setEditItem] = useState(null);
   const [editPortions, setEditPortions] = useState([]);
   const [editPortionInput, setEditPortionInput] = useState({ name: '', price: '' });
 
-  useEffect(() => {
-    restaurants.forEach(async r => {
-      const res = await API.get(`/api/menu/${r.id}`);
-      setMenuData(prev => ({ ...prev, [r.id]: res.data }));
-    });
-  }, [restaurants]);
+  useEffect(() => { restaurants.forEach(async r => { const res = await API.get(`/api/menu/${r.id}`); setMenuData(prev => ({ ...prev, [r.id]: res.data })); }); }, [restaurants]);
 
-  const openEdit = (item) => {
-    setEditItem({ ...item });
-    try {
-      setEditPortions(item.portions ? JSON.parse(item.portions) : []);
-    } catch { setEditPortions([]); }
-  };
-
-  const addEditPortion = () => {
-    if (!editPortionInput.name || !editPortionInput.price) return;
-    setEditPortions([...editPortions, { name: editPortionInput.name, price: parseInt(editPortionInput.price) }]);
-    setEditPortionInput({ name: '', price: '' });
-  };
-
+  const openEdit = (item) => { setEditItem({ ...item }); try { setEditPortions(item.portions ? JSON.parse(item.portions) : []); } catch { setEditPortions([]); } };
+  const addEditPortion = () => { if (!editPortionInput.name || !editPortionInput.price) return; setEditPortions([...editPortions, { name: editPortionInput.name, price: parseInt(editPortionInput.price) }]); setEditPortionInput({ name: '', price: '' }); };
   const removeEditPortion = (i) => setEditPortions(editPortions.filter((_, idx) => idx !== i));
 
   const saveEdit = async () => {
     const basePrice = editPortions.length > 0 ? editPortions[0].price : parseInt(editItem.price);
-    await API.post('/api/menu/update', {
-      id: editItem.id, name: editItem.name, price: basePrice,
-      original_price: editItem.original_price || null,
-      portions: editPortions.length > 0 ? editPortions : null,
-      description: editItem.description, image: editItem.image,
-      is_available: editItem.is_available
-    });
+    await API.post('/api/menu/update', { id: editItem.id, name: editItem.name, price: basePrice, original_price: editItem.original_price || null, portions: editPortions.length > 0 ? editPortions : null, description: editItem.description, image: editItem.image, is_available: editItem.is_available });
     setEditItem(null);
     reload();
   };
 
-  const reloadMenu = () => {
-    restaurants.forEach(async r => {
-      const res = await API.get(`/api/menu/${r.id}`);
-      setMenuData(prev => ({ ...prev, [r.id]: res.data }));
-    });
-    reload();
-  };
+  const reloadMenu = () => { restaurants.forEach(async r => { const res = await API.get(`/api/menu/${r.id}`); setMenuData(prev => ({ ...prev, [r.id]: res.data })); }); reload(); };
 
   return (
     <div>
@@ -702,14 +834,12 @@ function MenuTable({ restaurants, reload }) {
             <h3 style={s.modalTitle}>Edit Menu Item</h3>
             <input style={s.input} placeholder="Name" value={editItem.name} onChange={e => setEditItem({ ...editItem, name: e.target.value })} />
             <textarea style={s.textarea} placeholder="Description" value={editItem.description || ''} onChange={e => setEditItem({ ...editItem, description: e.target.value })} />
-
             {editPortions.length === 0 && (
               <div style={s.formGrid}>
                 <input style={s.input} placeholder="Price (₹)" type="number" value={editItem.price} onChange={e => setEditItem({ ...editItem, price: e.target.value })} />
                 <input style={s.input} placeholder="Original Price (₹)" type="number" value={editItem.original_price || ''} onChange={e => setEditItem({ ...editItem, original_price: e.target.value })} />
               </div>
             )}
-
             <div style={s.portionBox}>
               <label style={s.uploadLabel}>🍛 Portion Sizes</label>
               <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
@@ -717,22 +847,11 @@ function MenuTable({ restaurants, reload }) {
                 <input style={{ ...s.input, marginBottom: 0, width: '100px' }} placeholder="Price" type="number" value={editPortionInput.price} onChange={e => setEditPortionInput({ ...editPortionInput, price: e.target.value })} />
                 <button style={s.btnConfirm} onClick={addEditPortion}>+ Add</button>
               </div>
-              {editPortions.length > 0 && (
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  {editPortions.map((p, i) => (
-                    <div key={i} style={s.portionChip}>
-                      {p.name} — ₹{p.price} <span style={{ cursor: 'pointer', color: '#e74c3c', marginLeft: '6px' }} onClick={() => removeEditPortion(i)}>✕</span>
-                    </div>
-                  ))}
-                </div>
-              )}
+              {editPortions.length > 0 && (<div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>{editPortions.map((p, i) => <div key={i} style={s.portionChip}>{p.name} — ₹{p.price} <span style={{ cursor: 'pointer', color: '#e74c3c', marginLeft: '6px' }} onClick={() => removeEditPortion(i)}>✕</span></div>)}</div>)}
             </div>
-
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '10px 0', fontSize: '14px' }}>
-              <input type="checkbox" checked={editItem.is_available === 1} onChange={e => setEditItem({ ...editItem, is_available: e.target.checked ? 1 : 0 })} />
-              Available (uncheck for "Out of Stock")
+              <input type="checkbox" checked={editItem.is_available === 1} onChange={e => setEditItem({ ...editItem, is_available: e.target.checked ? 1 : 0 })} /> Available (uncheck for "Out of Stock")
             </label>
-
             <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
               <button style={s.btnGreen} onClick={saveEdit}>Save Changes</button>
               <button style={s.btnRed} onClick={() => setEditItem(null)}>Cancel</button>
@@ -740,15 +859,10 @@ function MenuTable({ restaurants, reload }) {
           </div>
         </div>
       )}
-
       {restaurants.map(r => (
         <div key={r.id} style={{ marginBottom: '20px' }}>
-          <div style={{ fontSize: '16px', fontWeight: '700', color: '#ff6b00', marginBottom: '10px', padding: '8px 0', borderBottom: '2px solid #ff6b00' }}>
-            {r.emoji} {r.name}
-          </div>
-          {(menuData[r.id] || []).length === 0 ? (
-            <p style={{ color: '#aaa', fontSize: '14px' }}>No items yet</p>
-          ) : (
+          <div style={{ fontSize: '16px', fontWeight: '700', color: '#ff6b00', marginBottom: '10px', padding: '8px 0', borderBottom: '2px solid #ff6b00' }}>{r.emoji} {r.name}</div>
+          {(menuData[r.id] || []).length === 0 ? <p style={{ color: '#aaa', fontSize: '14px' }}>No items yet</p> : (
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead><tr>{['Image', 'Category', 'Item', 'Price', 'Status', 'Action'].map(h => <th key={h} style={{ textAlign: 'left', padding: '8px', fontSize: '12px', color: '#888', borderBottom: '1px solid #f0f0f0' }}>{h}</th>)}</tr></thead>
               <tbody>
@@ -757,36 +871,19 @@ function MenuTable({ restaurants, reload }) {
                   try { itemPortions = item.portions ? JSON.parse(item.portions) : []; } catch {}
                   return (
                     <tr key={item.id}>
-                      <td style={{ padding: '8px' }}>
-                        {item.image ? <img src={item.image} alt="" style={{ width: '45px', height: '45px', borderRadius: '8px', objectFit: 'cover' }} /> : <span style={{ fontSize: '24px' }}>🍽️</span>}
-                      </td>
+                      <td style={{ padding: '8px' }}>{item.image ? <img src={item.image} alt="" style={{ width: '45px', height: '45px', borderRadius: '8px', objectFit: 'cover' }} /> : <span style={{ fontSize: '24px' }}>🍽️</span>}</td>
                       <td style={{ padding: '8px', fontSize: '13px' }}>{item.category}</td>
                       <td style={{ padding: '8px', fontSize: '13px' }}><strong>{item.name}</strong><div style={{ fontSize: '12px', color: '#888' }}>{item.description}</div></td>
                       <td style={{ padding: '8px', fontSize: '13px' }}>
-                        {itemPortions.length > 0 ? (
-                          itemPortions.map((p, i) => <div key={i}>{p.name}: ₹{p.price}</div>)
-                        ) : item.original_price ? (
-                          <>
-                            <span style={{ color: '#aaa', textDecoration: 'line-through', marginRight: '6px' }}>₹{item.original_price}</span>
-                            <span style={{ color: '#ff6b00', fontWeight: '700' }}>₹{item.price}</span>
-                          </>
-                        ) : (
-                          <span style={{ color: '#ff6b00', fontWeight: '700' }}>₹{item.price}</span>
-                        )}
+                        {itemPortions.length > 0 ? itemPortions.map((p, i) => <div key={i}>{p.name}: ₹{p.price}</div>) :
+                          item.original_price ? (<><span style={{ color: '#aaa', textDecoration: 'line-through', marginRight: '6px' }}>₹{item.original_price}</span><span style={{ color: '#ff6b00', fontWeight: '700' }}>₹{item.price}</span></>) :
+                            <span style={{ color: '#ff6b00', fontWeight: '700' }}>₹{item.price}</span>}
                       </td>
-                      <td style={{ padding: '8px' }}>
-                        <span style={{ ...s.badge2, background: item.is_available ? '#d1e7dd' : '#f8d7da', color: item.is_available ? '#0a3622' : '#842029' }}>
-                          {item.is_available ? 'Available' : 'Out of Stock'}
-                        </span>
-                      </td>
+                      <td style={{ padding: '8px' }}><span style={{ ...s.badge2, background: item.is_available ? '#d1e7dd' : '#f8d7da', color: item.is_available ? '#0a3622' : '#842029' }}>{item.is_available ? 'Available' : 'Out of Stock'}</span></td>
                       <td style={{ padding: '8px' }}>
                         <button style={s.btnConfirm} onClick={() => openEdit(item)}>Edit</button>
-                        <button style={{ ...s.btnConfirm, marginLeft: '5px', background: item.is_available ? '#f8d7da' : '#d1e7dd', color: item.is_available ? '#842029' : '#0a3622' }}
-                          onClick={() => { API.post('/api/menu/toggle', { id: item.id, is_available: item.is_available ? 0 : 1 }); reloadMenu(); }}>
-                          {item.is_available ? 'Mark Out' : 'Mark In'}
-                        </button>
-                        <button style={{ background: '#f8d7da', color: '#842029', border: 'none', padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', marginLeft: '5px' }}
-                          onClick={() => { API.post('/api/menu/delete', { id: item.id }); reloadMenu(); }}>Delete</button>
+                        <button style={{ ...s.btnConfirm, marginLeft: '5px', background: item.is_available ? '#f8d7da' : '#d1e7dd', color: item.is_available ? '#842029' : '#0a3622' }} onClick={() => { API.post('/api/menu/toggle', { id: item.id, is_available: item.is_available ? 0 : 1 }); reloadMenu(); }}>{item.is_available ? 'Mark Out' : 'Mark In'}</button>
+                        <button style={{ background: '#f8d7da', color: '#842029', border: 'none', padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', marginLeft: '5px' }} onClick={() => { API.post('/api/menu/delete', { id: item.id }); reloadMenu(); }}>Delete</button>
                       </td>
                     </tr>
                   );
@@ -802,14 +899,10 @@ function MenuTable({ restaurants, reload }) {
 
 function getBadge(status) {
   const colors = {
-    pending: { background: '#fff3cd', color: '#856404' },
-    confirmed: { background: '#cfe2ff', color: '#084298' },
-    preparing: { background: '#e2d9f3', color: '#6f42c1' },
-    on_the_way: { background: '#ffd700', color: '#333' },
-    delivered: { background: '#d1e7dd', color: '#0a3622' },
-    cancelled: { background: '#f8d7da', color: '#842029' },
-    approved: { background: '#d1e7dd', color: '#0a3622' },
-    rejected: { background: '#f8d7da', color: '#842029' },
+    pending: { background: '#fff3cd', color: '#856404' }, confirmed: { background: '#cfe2ff', color: '#084298' },
+    preparing: { background: '#e2d9f3', color: '#6f42c1' }, on_the_way: { background: '#ffd700', color: '#333' },
+    delivered: { background: '#d1e7dd', color: '#0a3622' }, cancelled: { background: '#f8d7da', color: '#842029' },
+    approved: { background: '#d1e7dd', color: '#0a3622' }, rejected: { background: '#f8d7da', color: '#842029' },
   };
   return colors[status] || { background: '#f0f0f0', color: '#333' };
 }
@@ -820,9 +913,10 @@ const s = {
   sidebarLogo: { padding: '20px', borderBottom: '1px solid #2d2d44' },
   logoText: { color: '#ff6b00', fontSize: '22px', fontWeight: '700' },
   logoSub: { color: '#aaa', fontSize: '12px', marginTop: '3px' },
-  menuItem: { display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 20px', color: '#aaa', cursor: 'pointer', fontSize: '14px' },
+  menuItem: { display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 20px', color: '#aaa', cursor: 'pointer', fontSize: '14px', position: 'relative' },
   menuActive: { background: '#ff6b00', color: 'white', borderRadius: '0 25px 25px 0', marginRight: '15px' },
   menuIcon: { fontSize: '18px', width: '24px' },
+  sideBadge: { position: 'absolute', right: '25px', background: 'red', color: 'white', borderRadius: '10px', fontSize: '10px', padding: '2px 7px', fontWeight: '700' },
   main: { marginLeft: '240px', flex: 1 },
   topbar: { background: 'white', padding: '15px 30px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.08)', position: 'sticky', top: 0, zIndex: 99 },
   pageTitle: { fontSize: '20px', color: '#333', fontWeight: '600' },
@@ -840,7 +934,7 @@ const s = {
   statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', marginBottom: '25px' },
   statCard: { background: 'white', borderRadius: '16px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
   statLabel: { fontSize: '13px', color: '#888', marginBottom: '5px' },
-  statValue: { fontSize: '24px', fontWeight: '700', color: '#333' },
+  statValue: { fontSize: '22px', fontWeight: '700', color: '#333' },
   statIcon: { width: '55px', height: '55px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px' },
   tableCard: { background: 'white', borderRadius: '16px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', marginBottom: '20px' },
   formCard: { background: 'white', borderRadius: '16px', padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', marginBottom: '20px' },

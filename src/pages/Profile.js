@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../App';
+import API from '../api';
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -18,8 +19,28 @@ export default function Profile() {
   const [editName, setEditName] = useState(name);
   const [editPhone, setEditPhone] = useState('');
   const [editEmail, setEditEmail] = useState('');
+  const [ticketSubject, setTicketSubject] = useState('');
+  const [ticketMsg, setTicketMsg] = useState('');
+  const [ticketSent, setTicketSent] = useState(false);
+  const [ticketSending, setTicketSending] = useState(false);
 
   const logout = () => { localStorage.clear(); navigate('/login'); };
+
+  const submitTicket = async () => {
+    if (!ticketSubject || !ticketMsg) { alert('Subject aur message dono bharo!'); return; }
+    setTicketSending(true);
+    try {
+      const token = localStorage.getItem('token');
+      await API.post('/api/tickets', {
+        name, phone: editPhone || '', email: editEmail || '',
+        subject: ticketSubject, message: ticketMsg
+      }, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      setTicketSubject(''); setTicketMsg(''); setTicketSent(true);
+    } catch (e) {
+      alert('Error submitting ticket. Please try again.');
+    }
+    setTicketSending(false);
+  };
 
   const MenuItem = ({ icon, label, value, onClick, red, toggle, toggleVal, onToggle }) => (
     <div style={s.menuItem} onClick={onClick}>
@@ -256,6 +277,27 @@ export default function Profile() {
           <div style={{ color: '#666', fontSize: '14px', lineHeight: '1.6', whiteSpace: 'pre-line' }}>{item.a}</div>
         </div>
       ))}
+
+      {/* Raise a Ticket */}
+      <div style={{ background: 'white', borderRadius: '12px', padding: '16px', marginTop: '15px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+        <div style={{ fontWeight: '700', color: '#222', marginBottom: '10px' }}>📩 Raise a Ticket</div>
+        {ticketSent ? (
+          <div style={{ textAlign: 'center', padding: '15px 0' }}>
+            <div style={{ fontSize: '30px', marginBottom: '8px' }}>✅</div>
+            <div style={{ color: '#27ae60', fontWeight: '600' }}>Ticket submitted! We'll get back to you soon.</div>
+            <div style={{ color: '#ff6b00', fontSize: '13px', fontWeight: '600', marginTop: '12px', cursor: 'pointer' }} onClick={() => setTicketSent(false)}>Submit another ticket</div>
+          </div>
+        ) : (
+          <>
+            <input style={s.fieldInput} placeholder="Subject (e.g. Order not delivered)" value={ticketSubject} onChange={e => setTicketSubject(e.target.value)} />
+            <textarea style={{ ...s.fieldInput, height: '90px', resize: 'none', marginTop: '10px' }} placeholder="Describe your issue..." value={ticketMsg} onChange={e => setTicketMsg(e.target.value)} />
+            <button style={{ ...s.orangeBtn, opacity: ticketSending ? 0.7 : 1 }} onClick={submitTicket} disabled={ticketSending}>
+              {ticketSending ? 'Submitting...' : 'Submit Ticket'}
+            </button>
+          </>
+        )}
+      </div>
+
       <div style={{ background: '#fff3e0', borderRadius: '12px', padding: '16px', marginTop: '10px', textAlign: 'center' }}>
         <div style={{ fontWeight: '700', color: '#ff6b00', marginBottom: '5px' }}>Still need help?</div>
         <div style={{ color: '#888', fontSize: '13px' }}>Contact us at support@zeppo.in</div>

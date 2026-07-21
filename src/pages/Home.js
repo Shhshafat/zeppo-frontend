@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useCart } from '../App';
 import API from '../api';
-
-const NONVEG_KEYWORDS = ['chicken', 'mutton', 'egg', 'fish', 'meat', 'prawn', 'beef', 'lamb', 'keema'];
 
 export default function Home() {
   const navigate = useNavigate();
+  const { cartCount } = useCart();
   const [restaurants, setRestaurants] = useState([]);
   const [filteredItems, setFilteredItems] = useState([]);
   const [recentOrders, setRecentOrders] = useState([]);
@@ -25,9 +25,7 @@ export default function Home() {
   const locationSub = localStorage.getItem('locationSub') || 'Jammu & Kashmir';
   const token = localStorage.getItem('token');
 
-  const isVeg = (item) => !NONVEG_KEYWORDS.some(k =>
-    (item.name || '').toLowerCase().includes(k) || (item.category || '').toLowerCase().includes(k)
-  );
+  const isVeg = (item) => item.is_veg === 1 || item.is_veg === undefined;
 
   const loadData = useCallback(async () => {
     try {
@@ -41,11 +39,7 @@ export default function Home() {
       const rests = restRes.data;
       setRestaurants(rests);
       setRecentOrders(orderRes.data.slice(0, 3));
-      setBanners(bannerRes.data.length > 0 ? bannerRes.data : [
-        { id: 1, title: 'ZEPPO REWARDS', subtitle: 'Free delivery on first order!', button_text: 'ORDER NOW' },
-        { id: 2, title: 'DISHES FROM ₹49', subtitle: 'Price Crash!', button_text: 'ORDER NOW' },
-        { id: 3, title: 'FOOD IN 30 MINS', subtitle: 'Fast delivery guaranteed', button_text: 'ORDER NOW' },
-      ]);
+      setBanners(bannerRes.data);
 
       const allItems = [];
       for (const r of rests) {
@@ -75,7 +69,7 @@ export default function Home() {
 
   useEffect(() => {
     if (banners.length <= 1) return;
-    const timer = setInterval(() => setActiveBanner(p => (p + 1) % banners.length), 3000);
+    const timer = setInterval(() => setActiveBanner(p => (p + 1) % banners.length), 4500);
     return () => clearInterval(timer);
   }, [banners]);
 
@@ -128,30 +122,31 @@ export default function Home() {
     preparing: '#9b59b6', on_the_way: '#e67e22', delivered: '#27ae60'
   };
 
-  const bannerColors = [
-    ['#6B1B3A', '#4A0F2A'],
-    ['#1a1a6e', '#0d0d4a'],
-    ['#1B4332', '#0a2a1e'],
+  const categories = [
+    { img: 'https://images.unsplash.com/photo-1633945274405-b6c8069047b0?w=200&h=200&fit=crop&q=80', emoji: '🍽️', name: 'All' },
+    { img: 'https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=200&h=200&fit=crop&q=80', emoji: '🍚', name: 'Biryani' },
+    { img: 'https://images.unsplash.com/photo-1631452180519-c014fe946bc7?w=200&h=200&fit=crop&q=80', emoji: '🍲', name: 'Gravy' },
+    { img: 'https://images.unsplash.com/photo-1599487488170-d11ec9c172f0?w=200&h=200&fit=crop&q=80', emoji: '🔥', name: 'Tandoori' },
+    { img: 'https://images.unsplash.com/photo-1606491956689-2ea866880c84?w=200&h=200&fit=crop&q=80', emoji: '🍢', name: 'Tikka' },
+    { img: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=200&h=200&fit=crop&q=80', emoji: '🍕', name: 'Pizza' },
+    { img: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=200&h=200&fit=crop&q=80', emoji: '🍔', name: 'Burger' },
+    { img: 'https://images.unsplash.com/photo-1437418747212-8d9709afab22?w=200&h=200&fit=crop&q=80', emoji: '🥤', name: 'Drinks' },
+    { img: 'https://images.unsplash.com/photo-1626645738196-c2a7c87a8f58?w=200&h=200&fit=crop&q=80', emoji: '🍗', name: 'Fast Food' },
+    { img: 'https://images.unsplash.com/photo-1551024506-0bccd828d307?w=200&h=200&fit=crop&q=80', emoji: '🍰', name: 'Desserts' },
   ];
 
-  const categories = [
-    { emoji: '🍽️', name: 'All' },
-    { emoji: '🍚', name: 'Biryani' },
-    { emoji: '🍲', name: 'Gravy' },
-    { emoji: '🔥', name: 'Tandoori' },
-    { emoji: '🍢', name: 'Tikka' },
-    { emoji: '🍕', name: 'Pizza' },
-    { emoji: '🍔', name: 'Burger' },
-    { emoji: '🥤', name: 'Drinks' },
-    { emoji: '🍗', name: 'Fast Food' },
-    { emoji: '🍰', name: 'Desserts' },
+  const moreOnZeppo = [
+    { emoji: '🎟️', title: 'Coupons', sub: 'Save more', bg: 'linear-gradient(135deg,#6B1B3A,#4A0F2A)', action: () => navigate('/stores') },
+    { emoji: '🛵', title: 'Delivery Partner', sub: 'Join & earn', bg: 'linear-gradient(135deg,#1a1a6e,#0d0d4a)', action: () => navigate('/delivery-signup') },
+    { emoji: '📦', title: 'Track Order', sub: 'Live status', bg: 'linear-gradient(135deg,#1B4332,#0a2a1e)', action: () => navigate('/track') },
+    { emoji: '🏪', title: 'All Stores', sub: 'Explore', bg: 'linear-gradient(135deg,#7c2d12,#431407)', action: () => navigate('/stores') },
   ];
 
   if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#1a0a0f', flexDirection: 'column', gap: '15px' }}>
-      <div style={{ fontSize: '60px' }}>⚡</div>
-      <div style={{ color: '#ff6b00', fontWeight: '700', fontSize: '20px', letterSpacing: '3px' }}>ZEPPO</div>
-      <div style={{ color: '#888', fontSize: '14px' }}>Loading...</div>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#1a0a0f', flexDirection: 'column', gap: '18px' }}>
+      <style>{`@keyframes zeppoSpin { to { transform: rotate(360deg); } }`}</style>
+      <div style={{ color: '#ff6b00', fontWeight: '800', fontSize: '24px', letterSpacing: '4px' }}>ZEPPO</div>
+      <div style={{ width: '34px', height: '34px', border: '3px solid rgba(255,107,0,0.2)', borderTopColor: '#ff6b00', borderRadius: '50%', animation: 'zeppoSpin 0.8s linear infinite' }} />
     </div>
   );
 
@@ -181,20 +176,16 @@ export default function Home() {
           <p style={s.dineoutText}>Book tables at your favorite Kupwara restaurants — launching soon on ZEPPO 🎉</p>
           <button style={s.dineoutBtn} onClick={() => setActiveTab('food')}>Back to Food →</button>
         </div>
-        <div style={s.bottomNav}>
-          <div style={{ ...s.navItem, color: '#ff6b00' }} onClick={() => setActiveTab('food')}>
-            <span style={s.navIcon}>🏠</span><span>Home</span>
-          </div>
-          <div style={s.navItem} onClick={() => navigate('/stores')}><span style={s.navIcon}>🏪</span><span>Stores</span></div>
-          <div style={s.navItem} onClick={() => navigate('/track')}><span style={s.navIcon}>📦</span><span>Orders</span></div>
-          <div style={s.navItem} onClick={() => navigate('/profile')}><span style={s.navIcon}>👤</span><span>Profile</span></div>
-        </div>
+        <BottomNav navigate={navigate} active="home" cartCount={cartCount} onHome={() => setActiveTab('food')} />
       </div>
     );
   }
 
   return (
     <div style={s.container}>
+      <style>{`
+        @keyframes fadeBanner { from { opacity: 0; } to { opacity: 1; } }
+      `}</style>
 
       <div style={s.header}>
         <div style={s.headerLeft} onClick={() => navigate('/location')}>
@@ -302,39 +293,47 @@ export default function Home() {
 
       {!showSearch && (
         <>
-          <div style={s.bigBannerWrap}>
-            <div style={{ ...s.bigBanner, background: `linear-gradient(135deg, ${bannerColors[activeBanner % bannerColors.length][0]}, ${bannerColors[activeBanner % bannerColors.length][1]})` }}>
-              <div style={s.bigBannerContent}>
-                <div style={s.bigBannerTag}>⚡ EXCLUSIVE</div>
-                <div style={s.bigBannerTitle}>{banners[activeBanner]?.title}</div>
-                <div style={s.bigBannerSub}>{banners[activeBanner]?.subtitle}</div>
-                <div style={s.bigBannerBtn}>{banners[activeBanner]?.button_text || 'ORDER NOW'}</div>
+          {/* BANNER — supports image AND video, functional Order Now button */}
+          {banners.length > 0 && (
+            <div style={s.bigBannerWrap}>
+              <div style={s.bigBanner}>
+                {banners.map((b, i) => (
+                  i === activeBanner && (
+                    <div key={b.id} style={s.bannerSlide}>
+                      {b.is_video ? (
+                        <video
+                          src={b.image}
+                          autoPlay
+                          muted
+                          loop
+                          playsInline
+                          style={s.bannerMedia}
+                        />
+                      ) : (
+                        <img src={b.image} alt={b.title} style={s.bannerMedia} />
+                      )}
+                      <div style={s.bannerOverlay} />
+                      <div style={s.bannerTextBox}>
+                        <div style={s.bigBannerTag}>⚡ EXCLUSIVE</div>
+                        <div style={s.bigBannerTitle}>{b.title}</div>
+                        <div style={s.bigBannerSub}>{b.subtitle}</div>
+                        <div style={s.bigBannerBtn} onClick={(e) => { e.stopPropagation(); if (b.link) navigate(b.link); }}>
+                          {b.button_text || 'ORDER NOW'}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                ))}
               </div>
-              <div style={s.bigBannerEmoji}>🎟️</div>
+              {banners.length > 1 && (
+                <div style={s.bannerDots}>
+                  {banners.map((_, i) => (
+                    <div key={i} style={{ ...s.dot, background: i === activeBanner ? '#ff6b00' : '#ddd', width: i === activeBanner ? '20px' : '6px' }} onClick={() => setActiveBanner(i)} />
+                  ))}
+                </div>
+              )}
             </div>
-            <div style={s.miniBanners}>
-              <div style={{ ...s.miniBanner, background: 'linear-gradient(135deg, #6B1B3A, #4A0F2A)' }}>
-                <div style={s.miniBannerBadge}>PRICE CRASH</div>
-                <div style={s.miniBannerTitle}>Dishes From ₹49</div>
-                <div style={s.miniBannerSub}>💥 Limited Time</div>
-              </div>
-              <div style={{ ...s.miniBanner, background: 'linear-gradient(135deg, #1a1a6e, #0d0d4a)' }}>
-                <div style={s.miniBannerBadge}>99 STORE</div>
-                <div style={s.miniBannerTitle}>Meals At ₹99</div>
-                <div style={s.miniBannerSub}>🎉 Free Delivery</div>
-              </div>
-              <div style={{ ...s.miniBanner, background: 'linear-gradient(135deg, #1B4332, #0a2a1e)' }}>
-                <div style={s.miniBannerBadge}>BOLT</div>
-                <div style={s.miniBannerTitle}>Food In 30 Min</div>
-                <div style={s.miniBannerSub}>⚡ Fast Delivery</div>
-              </div>
-            </div>
-            <div style={s.bannerDots}>
-              {banners.map((_, i) => (
-                <div key={i} style={{ ...s.dot, background: i === activeBanner ? '#ff6b00' : 'rgba(255,255,255,0.3)', width: i === activeBanner ? '20px' : '6px' }} onClick={() => setActiveBanner(i)} />
-              ))}
-            </div>
-          </div>
+          )}
 
           <div style={s.whiteSection}>
 
@@ -343,10 +342,24 @@ export default function Home() {
               <div style={s.categories}>
                 {categories.map(cat => (
                   <div key={cat.name} style={s.category} onClick={() => filterByCategory(cat.name)}>
-                    <div style={{ ...s.catCircle, border: activeCategory === cat.name ? '2.5px solid #ff6b00' : '2.5px solid transparent', background: activeCategory === cat.name ? 'linear-gradient(135deg, #fff3e0, #ffe0cc)' : 'linear-gradient(135deg, #f9f9f9, #f0f0f0)', boxShadow: activeCategory === cat.name ? '0 4px 12px rgba(255,107,0,0.25)' : '0 2px 8px rgba(0,0,0,0.06)' }}>
-                      {cat.emoji}
+                    <div style={{ ...s.catCircle, border: activeCategory === cat.name ? '2.5px solid #ff6b00' : '2.5px solid transparent' }}>
+                      <img src={cat.img} alt={cat.name} style={s.catImg}
+                        onError={e => { e.target.outerHTML = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:28px;background:#f5f5f5;">${cat.emoji}</div>`; }} />
                     </div>
                     <div style={{ ...s.catName, color: activeCategory === cat.name ? '#ff6b00' : '#444', fontWeight: activeCategory === cat.name ? '700' : '500' }}>{cat.name}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={s.section}>
+              <div style={s.sectionTitle}>More on ZEPPO</div>
+              <div style={s.moreGrid}>
+                {moreOnZeppo.map(m => (
+                  <div key={m.title} style={{ ...s.moreTile, background: m.bg }} onClick={m.action}>
+                    <div style={s.moreEmoji}>{m.emoji}</div>
+                    <div style={s.moreTitle}>{m.title}</div>
+                    <div style={s.moreSub}>{m.sub}</div>
                   </div>
                 ))}
               </div>
@@ -478,29 +491,30 @@ export default function Home() {
         </>
       )}
 
-      <div style={s.bottomNav}>
-        <div style={{ ...s.navItem, color: activeNav === 'home' ? '#ff6b00' : '#888' }}
-          onClick={() => { setActiveNav('home'); setShowSearch(false); setSearch(''); setVegMode(false); setFilteredItems(menuItems); }}>
-          <span style={s.navIcon}>🏠</span>
-          <span>Home</span>
-        </div>
-        <div style={{ ...s.navItem, color: activeNav === 'stores' ? '#ff6b00' : '#888' }}
-          onClick={() => { setActiveNav('stores'); navigate('/stores'); }}>
-          <span style={s.navIcon}>🏪</span>
-          <span>Stores</span>
-        </div>
-        <div style={{ ...s.navItem, color: activeNav === 'orders' ? '#ff6b00' : '#888' }}
-          onClick={() => { setActiveNav('orders'); navigate('/track'); }}>
-          <span style={s.navIcon}>📦</span>
-          <span>Orders</span>
-        </div>
-        <div style={{ ...s.navItem, color: activeNav === 'profile' ? '#ff6b00' : '#888' }}
-          onClick={() => { setActiveNav('profile'); navigate('/profile'); }}>
-          <span style={s.navIcon}>👤</span>
-          <span>Profile</span>
-        </div>
-      </div>
+      <BottomNav navigate={navigate} active="home" cartCount={cartCount} />
+    </div>
+  );
+}
 
+function BottomNav({ navigate, active, cartCount, onHome }) {
+  return (
+    <div style={s.bottomNav}>
+      <div style={{ ...s.navItem, color: active === 'home' ? '#ff6b00' : '#888' }} onClick={() => onHome ? onHome() : navigate('/')}>
+        <span style={s.navIcon}>🏠</span><span>Home</span>
+      </div>
+      <div style={{ ...s.navItem, color: active === 'stores' ? '#ff6b00' : '#888' }} onClick={() => navigate('/stores')}>
+        <span style={s.navIcon}>🏪</span><span>Stores</span>
+      </div>
+      <div style={{ ...s.navItem, color: active === 'cart' ? '#ff6b00' : '#888', position: 'relative' }} onClick={() => navigate('/cart')}>
+        <span style={s.navIcon}>🛒</span><span>Cart</span>
+        {cartCount > 0 && <span style={s.navCartBadge}>{cartCount}</span>}
+      </div>
+      <div style={{ ...s.navItem, color: active === 'orders' ? '#ff6b00' : '#888' }} onClick={() => navigate('/track')}>
+        <span style={s.navIcon}>📦</span><span>Orders</span>
+      </div>
+      <div style={{ ...s.navItem, color: active === 'profile' ? '#ff6b00' : '#888' }} onClick={() => navigate('/profile')}>
+        <span style={s.navIcon}>👤</span><span>Profile</span>
+      </div>
     </div>
   );
 }
@@ -557,18 +571,15 @@ const s = {
   searchStoreMeta: { fontSize: '12px', color: '#888', marginBottom: '3px' },
 
   bigBannerWrap: { margin: '0 16px 5px' },
-  bigBanner: { borderRadius: '16px', padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', minHeight: '130px' },
-  bigBannerContent: {},
-  bigBannerTag: { fontSize: '10px', color: 'rgba(255,255,255,0.7)', letterSpacing: '2px', marginBottom: '6px' },
-  bigBannerTitle: { fontSize: '20px', fontWeight: '800', color: 'white', marginBottom: '4px', lineHeight: '1.2' },
-  bigBannerSub: { fontSize: '12px', color: 'rgba(255,255,255,0.7)', marginBottom: '12px' },
-  bigBannerBtn: { background: 'white', color: '#333', padding: '7px 16px', borderRadius: '20px', fontSize: '12px', fontWeight: '700', display: 'inline-block', cursor: 'pointer' },
-  bigBannerEmoji: { fontSize: '60px' },
-  miniBanners: { display: 'flex', gap: '8px', marginBottom: '10px' },
-  miniBanner: { flex: 1, borderRadius: '12px', padding: '12px 10px', minHeight: '80px', position: 'relative', overflow: 'hidden' },
-  miniBannerBadge: { fontSize: '9px', fontWeight: '800', color: 'rgba(255,255,255,0.6)', letterSpacing: '1px', marginBottom: '6px' },
-  miniBannerTitle: { fontSize: '12px', fontWeight: '700', color: 'white', marginBottom: '4px' },
-  miniBannerSub: { fontSize: '10px', color: 'rgba(255,255,255,0.8)', fontWeight: '600' },
+  bigBanner: { borderRadius: '18px', overflow: 'hidden', marginBottom: '10px', minHeight: '160px', position: 'relative', background: '#1a1a2e' },
+  bannerSlide: { position: 'relative', minHeight: '160px', animation: 'fadeBanner 0.4s ease' },
+  bannerMedia: { width: '100%', height: '160px', objectFit: 'cover', display: 'block' },
+  bannerOverlay: { position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,0,0,0.05), rgba(0,0,0,0.6))' },
+  bannerTextBox: { position: 'absolute', inset: 0, padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' },
+  bigBannerTag: { fontSize: '10px', color: 'rgba(255,255,255,0.85)', letterSpacing: '2px', marginBottom: '6px', fontWeight: '700' },
+  bigBannerTitle: { fontSize: '21px', fontWeight: '800', color: 'white', marginBottom: '4px', lineHeight: '1.2', textShadow: '0 2px 8px rgba(0,0,0,0.4)' },
+  bigBannerSub: { fontSize: '13px', color: 'rgba(255,255,255,0.9)', marginBottom: '12px' },
+  bigBannerBtn: { background: 'white', color: '#333', padding: '8px 18px', borderRadius: '20px', fontSize: '12px', fontWeight: '700', display: 'inline-block', width: 'fit-content', cursor: 'pointer' },
   bannerDots: { display: 'flex', justifyContent: 'center', gap: '6px', marginBottom: '5px' },
   dot: { height: '6px', borderRadius: '3px', cursor: 'pointer', transition: '0.3s' },
 
@@ -579,10 +590,18 @@ const s = {
   sectionSub: { fontSize: '13px', color: '#888', marginBottom: '15px' },
   seeAll: { fontSize: '13px', color: '#ff6b00', fontWeight: '600', cursor: 'pointer' },
   storeCount: { fontSize: '13px', color: '#888' },
-  categories: { display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '10px', scrollbarWidth: 'none' },
-  category: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '7px', cursor: 'pointer', minWidth: '62px' },
-  catCircle: { width: '62px', height: '62px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px', transition: '0.2s' },
+  categories: { display: 'flex', gap: '16px', overflowX: 'auto', paddingBottom: '10px', scrollbarWidth: 'none' },
+  category: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '7px', cursor: 'pointer', minWidth: '68px' },
+  catCircle: { width: '68px', height: '68px', borderRadius: '50%', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', transition: '0.2s' },
+  catImg: { width: '100%', height: '100%', objectFit: 'cover' },
   catName: { fontSize: '11px', textAlign: 'center', transition: '0.2s' },
+
+  moreGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '10px' },
+  moreTile: { borderRadius: '14px', padding: '14px 8px', textAlign: 'center', cursor: 'pointer', color: 'white' },
+  moreEmoji: { fontSize: '24px', marginBottom: '6px' },
+  moreTitle: { fontSize: '11px', fontWeight: '700', lineHeight: '1.2' },
+  moreSub: { fontSize: '9px', opacity: 0.8, marginTop: '2px' },
+
   hScroll: { display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '10px', paddingTop: '10px', scrollbarWidth: 'none' },
   orderCard: { background: 'white', borderRadius: '12px', padding: '14px', minWidth: '180px', boxShadow: '0 2px 6px rgba(0,0,0,0.06)', cursor: 'pointer', flexShrink: 0 },
   orderRestName: { fontSize: '14px', fontWeight: '700', color: '#222', marginBottom: '5px' },
@@ -627,6 +646,7 @@ const s = {
   partnerSub: { fontSize: '12px', color: '#888' },
   partnerBtn: { background: '#ff6b00', color: 'white', border: 'none', padding: '10px 16px', borderRadius: '10px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' },
   bottomNav: { position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: '480px', background: 'white', borderTop: '1px solid #f0f0f0', display: 'flex', zIndex: 100, boxShadow: '0 -2px 10px rgba(0,0,0,0.06)' },
-  navItem: { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', padding: '10px 5px', cursor: 'pointer', color: '#888', fontSize: '11px' },
+  navItem: { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', padding: '10px 5px', cursor: 'pointer', fontSize: '11px', position: 'relative' },
   navIcon: { fontSize: '22px' },
+  navCartBadge: { position: 'absolute', top: '2px', right: '18px', background: '#27ae60', color: 'white', borderRadius: '50%', width: '16px', height: '16px', fontSize: '9px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700' },
 };
