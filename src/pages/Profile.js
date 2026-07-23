@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme, useCart } from '../App';
 import API from '../api';
@@ -25,7 +25,51 @@ export default function Profile() {
   const [ticketSent, setTicketSent] = useState(false);
   const [ticketSending, setTicketSending] = useState(false);
 
+  const [wallet, setWallet] = useState({ balance: 0, referral_code: null });
+  const [referrals, setReferrals] = useState([]);
+  const [walletLoading, setWalletLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
+
   const logout = () => { localStorage.clear(); navigate('/login'); };
+
+  useEffect(() => {
+    if (page === 'zeppomoney') loadWallet();
+  }, [page]);
+
+  const loadWallet = async () => {
+    try {
+      setWalletLoading(true);
+      const token = localStorage.getItem('token');
+      const [walletRes, referralsRes] = await Promise.all([
+        API.get('/api/wallet/me', { headers: { Authorization: `Bearer ${token}` } }),
+        API.get('/api/referrals/me', { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+      setWallet(walletRes.data);
+      setReferrals(referralsRes.data);
+    } catch (e) { console.error(e); }
+    finally { setWalletLoading(false); }
+  };
+
+  const shareReferralLink = () => {
+    const link = `${window.location.origin}/signup?ref=${wallet.referral_code}`;
+    if (navigator.share) {
+      navigator.share({
+        title: 'Join ZEPPO!',
+        text: `Use my code ${wallet.referral_code} on ZEPPO and we both get ₹50! 🎉`,
+        url: link,
+      }).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(`Use my code ${wallet.referral_code} on ZEPPO and we both get ₹50! 🎉 Sign up here: ${link}`);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const copyCodeOnly = () => {
+    navigator.clipboard.writeText(wallet.referral_code || '');
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const submitTicket = async () => {
     if (!ticketSubject || !ticketMsg) { alert('Subject aur message dono bharo!'); return; }
@@ -169,18 +213,44 @@ export default function Profile() {
 
   if (page === 'zeppomoney') return (
     <SubPage title="🎟️ ZEPPO Money">
-      <div style={{ background: '#fff3e0', borderRadius: '16px', padding: '20px', textAlign: 'center', marginBottom: '15px' }}>
+      <div style={{ background: 'linear-gradient(135deg, #ff6b00, #e05a00)', borderRadius: '16px', padding: '20px', textAlign: 'center', marginBottom: '15px' }}>
         <div style={{ fontSize: '40px', marginBottom: '10px' }}>💰</div>
-        <div style={{ fontSize: '32px', fontWeight: '800', color: '#ff6b00', marginBottom: '5px' }}>₹0</div>
-        <div style={{ color: '#888', fontSize: '14px' }}>Available Balance</div>
-      </div>
-      <div style={s.infoCard}>
-        <span style={{ fontSize: '20px' }}>🎁</span>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: '700', color: '#222' }}>Earn ZEPPO Money</div>
-          <div style={{ color: '#888', fontSize: '13px' }}>Refer friends and earn ₹50 each!</div>
+        <div style={{ fontSize: '32px', fontWeight: '800', color: 'white', marginBottom: '5px' }}>
+          {walletLoading ? '...' : `₹${wallet.balance}`}
         </div>
+        <div style={{ color: 'rgba(255,255,255,0.85)', fontSize: '14px' }}>Available Balance</div>
       </div>
+
+      <div style={{ background: 'white', borderRadius: '16px', padding: '20px', marginBottom: '15px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+        <div style={{ fontWeight: '700', color: '#222', marginBottom: '4px', fontSize: '15px' }}>🎁 Refer Friends, Earn ₹50 Each!</div>
+        <div style={{ color: '#888', fontSize: '13px', marginBottom: '15px' }}>Share your code — when a friend signs up, you both get ₹50 ZEPPO Money instantly.</div>
+        {walletLoading ? (
+          <div style={{ textAlign: 'center', padding: '10px', color: '#aaa' }}>Loading...</div>
+        ) : wallet.referral_code ? (
+          <>
+            <div style={s.codeBox}>
+              <span style={s.codeText}>{wallet.referral_code}</span>
+              <span style={s.copyBtn} onClick={copyCodeOnly}>{copied ? '✅ Copied' : '📋 Copy'}</span>
+            </div>
+            <button style={s.shareBtn} onClick={shareReferralLink}>📤 Share Referral Link</button>
+          </>
+        ) : (
+          <div style={{ color: '#aaa', fontSize: '13px' }}>Log in again to get your referral code.</div>
+        )}
+      </div>
+
+      {referrals.length > 0 && (
+        <div style={{ background: 'white', borderRadius: '16px', padding: '20px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+          <div style={{ fontWeight: '700', color: '#222', marginBottom: '12px', fontSize: '15px' }}>👥 Your Referrals ({referrals.length})</div>
+          {referrals.map(r => (
+            <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #f5f5f5' }}>
+              <span style={{ fontSize: '14px', color: '#333' }}>{r.referred_name || 'A friend'}</span>
+              <span style={{ fontSize: '13px', fontWeight: '700', color: '#27ae60' }}>+₹{r.reward_amount}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div style={s.infoCard}>
         <span style={{ fontSize: '20px' }}>🎟️</span>
         <div style={{ flex: 1 }}>
@@ -280,7 +350,7 @@ export default function Profile() {
       {[
         { q: '🕐 How do I track my order?', a: 'Go to Orders tab → your order → track in real time!' },
         { q: '❌ How to cancel an order?', a: 'Cancel within 2 minutes of placing. Go to Orders → Cancel.' },
-        { q: '💰 Refund policy?', a: 'Refunds processed within 5-7 business days to original payment.' },
+        { q: '💰 Refund policy?', a: 'UPI refunds are processed manually by our team within 3-5 business days.' },
         { q: '📞 Contact support?', a: 'Email: support@zeppo.in\nCall: +91-7006XXXXXX\nTime: 9AM - 9PM' },
         { q: '🛵 Become delivery partner?', a: 'Tap "Partner" on home page and fill the application form.' },
         { q: '🎟️ How to use coupon?', a: 'Enter coupon code ZEPPO50 in cart before placing order!' },
@@ -385,13 +455,13 @@ export default function Profile() {
         <div style={s.editProfileBtn} onClick={() => setPage('edit')}>Edit profile ›</div>
       </div>
 
-      <div style={s.premiumBanner} onClick={() => role === 'admin' ? navigate('/admin') : {}}>
+      <div style={s.premiumBanner} onClick={() => role === 'admin' ? navigate('/admin') : setPage('zeppomoney')}>
         <div style={s.premiumLeft}>
-          <div style={s.premiumIcon}>👑</div>
+          <div style={s.premiumIcon}>{role === 'admin' ? '👑' : '🎁'}</div>
           <div style={{ flex: 1 }}>
-            <div style={s.premiumTitle}>{role === 'admin' ? 'Admin Panel' : 'Join ZEPPO Premium'}</div>
-            <div style={s.premiumSub}>Unlimited free deliveries, extra discounts & more!</div>
-            <div style={s.premiumBtn}>{role === 'admin' ? 'Go to Panel →' : 'JOIN NOW'}</div>
+            <div style={s.premiumTitle}>{role === 'admin' ? 'Admin Panel' : 'Refer & Earn ₹50'}</div>
+            <div style={s.premiumSub}>{role === 'admin' ? 'Manage your ZEPPO business' : 'Invite friends, both of you get ZEPPO Money!'}</div>
+            <div style={s.premiumBtn}>{role === 'admin' ? 'Go to Panel →' : 'INVITE NOW'}</div>
           </div>
         </div>
         <span style={s.premiumArrow}>›</span>
@@ -484,4 +554,8 @@ const s = {
   navItem: { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', padding: '10px 5px', cursor: 'pointer', color: '#888', fontSize: '11px' },
   navIcon: { fontSize: '22px' },
   navCartBadge: { position: 'absolute', top: '2px', right: '18px', background: '#27ae60', color: 'white', borderRadius: '50%', width: '16px', height: '16px', fontSize: '9px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '700' },
+  codeBox: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff3e0', border: '2px dashed #ff6b00', borderRadius: '12px', padding: '14px 16px', marginBottom: '12px' },
+  codeText: { fontSize: '18px', fontWeight: '800', color: '#e65100', letterSpacing: '2px', fontFamily: 'monospace' },
+  copyBtn: { fontSize: '12px', fontWeight: '700', color: '#ff6b00', cursor: 'pointer' },
+  shareBtn: { width: '100%', padding: '13px', background: '#ff6b00', color: 'white', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '700', cursor: 'pointer' },
 };

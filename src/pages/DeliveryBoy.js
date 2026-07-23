@@ -7,14 +7,16 @@ export default function DeliveryBoy() {
   const [orders, setOrders] = useState([]);
   const [delivered, setDelivered] = useState(0);
   const [me, setMe] = useState(null);
+  const [advances, setAdvances] = useState([]);
   const [toggling, setToggling] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [showHistory, setShowHistory] = useState(false);
   const token = localStorage.getItem('token');
 
   useEffect(() => {
     if (!token) { navigate('/login'); return; }
-    Promise.all([loadOrders(), loadMe()]).finally(() => setLoading(false));
-    const interval = setInterval(() => { loadOrders(); loadMe(); }, 30000);
+    Promise.all([loadOrders(), loadMe(), loadAdvances()]).finally(() => setLoading(false));
+    const interval = setInterval(() => { loadOrders(); loadMe(); loadAdvances(); }, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -27,6 +29,11 @@ export default function DeliveryBoy() {
   const loadMe = async () => {
     const res = await API.get('/api/delivery-boys/me', { headers: { Authorization: `Bearer ${token}` } });
     setMe(res.data);
+  };
+
+  const loadAdvances = async () => {
+    const res = await API.get('/api/delivery-boys/my-advances', { headers: { Authorization: `Bearer ${token}` } });
+    setAdvances(res.data);
   };
 
   const toggleOnline = async () => {
@@ -44,9 +51,11 @@ export default function DeliveryBoy() {
 
   const logout = () => { localStorage.clear(); navigate('/login'); };
 
+  const formatDate = (dt) => dt ? new Date(dt + 'Z').toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-';
+
   const activeOrders = orders.filter(o => o.status !== 'delivered');
   const isOnline = me?.is_online === 1;
-  const netBalance = me ? me.total_earned - (me.advance_taken || 0) : 0;
+  const netBalance = me ? me.total_earned - (me.advance_taken || 0) - (me.paid_out || 0) : 0;
 
   const statusInfo = {
     confirmed: { label: 'New Order', color: '#3b82f6', bg: '#eff6ff' },
@@ -133,9 +142,36 @@ export default function DeliveryBoy() {
               </div>
               <div style={s.earningsDivider} />
               <div style={s.earningsRow}>
+                <span style={s.earningsLabel}>Already Paid Out</span>
+                <span style={{ ...s.earningsVal, color: '#7c3aed' }}>−₹{me.paid_out || 0}</span>
+              </div>
+              <div style={s.earningsDivider} />
+              <div style={s.earningsRow}>
                 <span style={{ ...s.earningsLabel, fontWeight: '700', color: '#111827' }}>Net Balance</span>
                 <span style={{ ...s.earningsVal, color: '#2563eb', fontSize: '19px' }}>₹{netBalance}</span>
               </div>
+
+              {advances.length > 0 && (
+                <>
+                  <div style={s.historyToggle} onClick={() => setShowHistory(!showHistory)}>
+                    <span>📜 Advance History ({advances.length})</span>
+                    <span>{showHistory ? '▲' : '▼'}</span>
+                  </div>
+                  {showHistory && (
+                    <div style={s.historyList}>
+                      {advances.map(a => (
+                        <div key={a.id} style={s.historyItem}>
+                          <div>
+                            <div style={s.historyNote}>{a.note || 'Advance payment'}</div>
+                            <div style={s.historyDate}>{formatDate(a.created_at)}</div>
+                          </div>
+                          <div style={s.historyAmount}>−₹{a.amount}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )}
 
@@ -259,6 +295,13 @@ const s = {
   earningsLabel: { fontSize: '13.5px', color: '#6b7280' },
   earningsVal: { fontSize: '15px', fontWeight: '700' },
   earningsDivider: { height: '1px', background: '#f3f4f6', margin: '4px 0' },
+
+  historyToggle: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '14px', padding: '10px 12px', background: '#fff8f0', borderRadius: '10px', fontSize: '13px', fontWeight: '600', color: '#e67e22', cursor: 'pointer' },
+  historyList: { marginTop: '10px' },
+  historyItem: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #f5f5f5' },
+  historyNote: { fontSize: '13px', color: '#374151', fontWeight: '500' },
+  historyDate: { fontSize: '11px', color: '#9ca3af', marginTop: '2px' },
+  historyAmount: { fontSize: '14px', fontWeight: '700', color: '#d97706' },
 
   sectionTitle: { fontSize: '16px', fontWeight: '700', color: '#111827', marginBottom: '12px' },
 

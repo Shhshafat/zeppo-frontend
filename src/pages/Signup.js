@@ -1,13 +1,19 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import API from '../api';
 
 export default function Signup() {
-  const [form, setForm] = useState({ name: '', email: '', phone: '', password: '' });
+  const [searchParams] = useSearchParams();
+  const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', referral_code: '' });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const ref = searchParams.get('ref');
+    if (ref) setForm(f => ({ ...f, referral_code: ref.toUpperCase() }));
+  }, [searchParams]);
 
   const handleSignup = async () => {
     if (!form.name || !form.email || !form.phone || !form.password) {
@@ -17,8 +23,8 @@ export default function Signup() {
     try {
       const res = await API.post('/api/register', form);
       if (res.data.success) {
-        setSuccess('Account created! Redirecting...');
-        setTimeout(() => navigate('/login'), 1500);
+        setSuccess(form.referral_code ? 'Account created! ₹50 ZEPPO Money credited 🎉 Redirecting...' : 'Account created! Redirecting...');
+        setTimeout(() => navigate('/login'), 1800);
       } else {
         setError(res.data.message);
       }
@@ -80,6 +86,16 @@ export default function Signup() {
           </div>
         </div>
 
+        <div style={s.field}>
+          <label style={s.label}>Referral Code <span style={{ color: 'rgba(255,255,255,0.4)', fontWeight: '400' }}>(optional)</span></label>
+          <div style={s.inputWrap}>
+            <span style={s.icon}>🎁</span>
+            <input style={s.input} placeholder="Enter friend's code — get ₹50!"
+              value={form.referral_code} onChange={e => { setForm({...form, referral_code: e.target.value.toUpperCase()}); setError(''); }} />
+          </div>
+          {form.referral_code && <div style={s.referralHint}>🎉 You and your friend will both get ₹50 ZEPPO Money!</div>}
+        </div>
+
         {error && <div style={s.error}>⚠️ {error}</div>}
         {success && <div style={s.success}>✅ {success}</div>}
 
@@ -116,6 +132,7 @@ const s = {
   inputWrap: { display: 'flex', alignItems: 'center', gap: '12px', background: 'rgba(255,255,255,0.08)', borderRadius: '14px', padding: '14px 16px', border: '1.5px solid rgba(255,255,255,0.1)' },
   icon: { fontSize: '16px', flexShrink: 0 },
   input: { flex: 1, border: 'none', background: 'none', outline: 'none', fontSize: '15px', color: 'white' },
+  referralHint: { fontSize: '12px', color: '#ffd700', marginTop: '8px', paddingLeft: '4px' },
   error: { background: 'rgba(255,0,0,0.15)', color: '#ff6b6b', padding: '12px', borderRadius: '10px', fontSize: '14px', marginBottom: '15px', border: '1px solid rgba(255,0,0,0.2)' },
   success: { background: 'rgba(39,174,96,0.15)', color: '#27ae60', padding: '12px', borderRadius: '10px', fontSize: '14px', marginBottom: '15px', border: '1px solid rgba(39,174,96,0.2)' },
   btn: { width: '100%', padding: '17px', background: '#ff6b00', color: 'white', border: 'none', borderRadius: '14px', fontSize: '15px', fontWeight: '800', cursor: 'pointer', letterSpacing: '1px', marginBottom: '20px', boxSizing: 'border-box' },

@@ -70,9 +70,18 @@ export default function Admin() {
     if (rests.data.length > 0 && !menuForm.restaurant_id) setMenuForm(f => ({ ...f, restaurant_id: rests.data[0].id }));
   };
 
+  const [refunds, setRefunds] = useState([]);
   const loadSettlements = async () => {
     const res = await API.get('/api/settlements/restaurants');
     setRestSettlements(res.data);
+    const refundRes = await API.get('/api/orders/refunds');
+    setRefunds(refundRes.data);
+  };
+
+  const markRefunded = async (id) => {
+    if (!window.confirm('Confirm that this refund has been sent to the customer?')) return;
+    await API.post('/api/orders/refunds/complete', { id });
+    loadSettlements();
   };
 
   const loadTickets = async () => {
@@ -324,6 +333,7 @@ export default function Admin() {
             <span style={s.menuIcon}>{p.icon}</span><span>{p.label}</span>
             {p.key === 'tickets' && analytics.openTickets > 0 && <span style={s.sideBadge}>{analytics.openTickets}</span>}
             {p.key === 'stays' && pendingBookingsCount > 0 && <span style={s.sideBadge}>{pendingBookingsCount}</span>}
+            {p.key === 'settlements' && analytics.pendingRefunds > 0 && <span style={s.sideBadge}>{analytics.pendingRefunds}</span>}
           </div>
         ))}
         <div style={s.menuItem} onClick={() => navigate('/')}><span style={s.menuIcon}>🏠</span><span>Go to App</span></div>
@@ -490,6 +500,7 @@ export default function Admin() {
                   { label: 'ZEPPO Commission', value: '₹' + (analytics.totalCommission || 0), icon: '💸', color: '#fff9c4' },
                   { label: 'Pending Delivery Payout', value: '₹' + (analytics.totalPendingPayout || 0), icon: '🛵', color: '#ffe0b2' },
                   { label: 'Open Support Tickets', value: analytics.openTickets || 0, icon: '🎫', color: '#fce4ec' },
+                  { label: 'Pending Refunds', value: analytics.pendingRefunds || 0, icon: '💰', color: '#ffe0e0' },
                 ].map(card => (
                   <div key={card.label} style={s.statCard}>
                     <div><div style={s.statLabel}>{card.label}</div><div style={s.statValue}>{card.value}</div></div>
@@ -777,6 +788,43 @@ export default function Admin() {
                   </tbody>
                 </table>
               </div>
+
+              <div style={s.tableCard}>
+                <h3 style={s.tableTitle}>💰 UPI Refunds Pending</h3>
+                <p style={{ fontSize: '12px', color: '#888', marginBottom: '15px' }}>Orders cancelled after being paid via UPI — money needs to be manually sent back to customer.</p>
+                {refunds.filter(o => o.refund_status === 'pending').length === 0 ? (
+                  <p style={{ color: '#27ae60', fontSize: '14px' }}>✅ No pending refunds!</p>
+                ) : (
+                  <table style={s.table}>
+                    <thead><tr>{['Order', 'Customer', 'Phone', 'Amount', 'Cancelled', 'Action'].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                    <tbody>
+                      {refunds.filter(o => o.refund_status === 'pending').map(o => (
+                        <tr key={o.id}>
+                          <td style={s.td}>#{o.id}</td>
+                          <td style={s.td}>{o.customer_name}</td>
+                          <td style={s.td}>{o.customer_phone}</td>
+                          <td style={{ ...s.td, fontWeight: '700', color: '#e74c3c' }}>₹{o.total}</td>
+                          <td style={s.td}>{formatDate(o.created_at)}</td>
+                          <td style={s.td}><button style={s.btnGreen} onClick={() => markRefunded(o.id)}>✅ Mark Refunded</button></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+                {refunds.filter(o => o.refund_status === 'refunded').length > 0 && (
+                  <>
+                    <div style={{ fontSize: '13px', fontWeight: '700', color: '#333', margin: '18px 0 8px' }}>Recently Refunded</div>
+                    <table style={s.table}>
+                      <thead><tr>{['Order', 'Customer', 'Amount'].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                      <tbody>
+                        {refunds.filter(o => o.refund_status === 'refunded').slice(0, 5).map(o => (
+                          <tr key={o.id}><td style={s.td}>#{o.id}</td><td style={s.td}>{o.customer_name}</td><td style={{ ...s.td, color: '#27ae60' }}>₹{o.total}</td></tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </>
+                )}
+              </div>
             </div>
           )}
 
@@ -1013,12 +1061,14 @@ export default function Admin() {
             <div style={s.tableCard}>
               <h3 style={s.tableTitle}>👥 All Users</h3>
               <table style={s.table}>
-                <thead><tr>{['ID', 'Name', 'Email', 'Phone', 'Role', 'Joined'].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                <thead><tr>{['ID', 'Name', 'Email', 'Phone', 'Role', 'Referral Code', 'Wallet', 'Joined'].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
                 <tbody>
                   {data.users.map(u => (
                     <tr key={u.id}>
                       <td style={s.td}>#{u.id}</td><td style={s.td}>{u.name}</td><td style={s.td}>{u.email}</td><td style={s.td}>{u.phone}</td>
                       <td style={s.td}><span style={{ ...s.badge2, background: u.role === 'admin' ? '#cfe2ff' : u.role === 'delivery' ? '#ffe0b2' : '#f0f0f0', color: u.role === 'admin' ? '#084298' : u.role === 'delivery' ? '#e65100' : '#333' }}>{u.role}</span></td>
+                      <td style={{ ...s.td, fontFamily: 'monospace', color: '#888' }}>{u.referral_code || '-'}</td>
+                      <td style={{ ...s.td, color: '#27ae60', fontWeight: '700' }}>₹{u.wallet_balance || 0}</td>
                       <td style={s.td}>{u.created_at}</td>
                     </tr>
                   ))}

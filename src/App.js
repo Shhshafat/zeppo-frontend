@@ -31,6 +31,57 @@ const AdminRoute = ({ children }) => {
   return token && role === 'admin' ? children : <Navigate to="/" />;
 };
 
+function OfflineBanner() {
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [showReconnected, setShowReconnected] = useState(false);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      setShowReconnected(true);
+      setTimeout(() => setShowReconnected(false), 2500);
+    };
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  if (!isOnline) {
+    return (
+      <div style={bannerStyles.offline}>
+        📡 No internet connection — some features may not work
+      </div>
+    );
+  }
+  if (showReconnected) {
+    return (
+      <div style={bannerStyles.online}>
+        ✅ Back online!
+      </div>
+    );
+  }
+  return null;
+}
+
+const bannerStyles = {
+  offline: {
+    position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
+    background: '#dc2626', color: 'white', textAlign: 'center',
+    padding: '10px 16px', fontSize: '13px', fontWeight: '600',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+  },
+  online: {
+    position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
+    background: '#16a34a', color: 'white', textAlign: 'center',
+    padding: '10px 16px', fontSize: '13px', fontWeight: '600',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+  },
+};
+
 function App() {
   const [darkMode, setDarkMode] = useState(
     localStorage.getItem('darkMode') === 'true'
@@ -56,7 +107,6 @@ function App() {
 
   const addToCart = (restaurantId, restaurantName, restaurantEmoji, item, label, price) => {
     setCart(prev => {
-      // Different restaurant — reset cart with new item
       if (prev.restaurantId && prev.restaurantId !== restaurantId && prev.items.length > 0) {
         const confirmSwitch = window.confirm(`Your cart has items from ${prev.restaurantName}. Clear cart and add from ${restaurantName} instead?`);
         if (!confirmSwitch) return prev;
@@ -96,6 +146,7 @@ function App() {
   return (
     <ThemeContext.Provider value={{ darkMode, toggleDark }}>
       <CartContext.Provider value={{ cart, addToCart, changeQty, removeItem, clearCart, cartCount, cartTotal }}>
+        <OfflineBanner />
         <div style={{ background: darkMode ? '#121212' : '#f7f7f7', minHeight: '100vh' }}>
           <Router>
             <Routes>
