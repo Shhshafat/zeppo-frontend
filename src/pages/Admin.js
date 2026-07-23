@@ -35,13 +35,29 @@ export default function Admin() {
   const [replyModal, setReplyModal] = useState(null);
   const [replyText, setReplyText] = useState('');
 
+  // App Settings state
+  const [settings, setSettings] = useState({});
+  const [settingsForm, setSettingsForm] = useState({ top_banner_image: '', tagline: 'Ghar tak, jhatpat!', support_email: 'support@zeppo.in', support_phone: '', whatsapp_number: '', maintenance_mode: 'off' });
+
+  // Stays state
+  const [stays, setStays] = useState([]);
+  const [stayBookings, setStayBookings] = useState([]);
+  const [stayForm, setStayForm] = useState({ name: '', type: 'Hotel', price_per_night: '', address: '', phone: '', amenities: '', description: '' });
+  const [editStay, setEditStay] = useState(null);
+  const [stayFilter, setStayFilter] = useState('pending');
+
   const restImgRef = useRef();
   const foodImgRef = useRef();
   const bannerFileRef = useRef();
+  const topBannerRef = useRef();
+  const stayImgRef = useRef();
+  const editStayImgRef = useRef();
 
   useEffect(() => { loadAll(); }, []);
   useEffect(() => { if (page === 'settlements') loadSettlements(); }, [page]);
   useEffect(() => { if (page === 'tickets') loadTickets(); }, [page]);
+  useEffect(() => { if (page === 'appsettings') loadSettings(); }, [page]);
+  useEffect(() => { if (page === 'stays') loadStays(); }, [page]);
 
   const loadAll = async () => {
     const [orders, rests, users, apps, dboys, notifs, banners, coupons, analytics, shifts] = await Promise.all([
@@ -62,6 +78,18 @@ export default function Admin() {
   const loadTickets = async () => {
     const res = await API.get('/api/tickets');
     setTickets(res.data);
+  };
+
+  const loadSettings = async () => {
+    const res = await API.get('/api/settings');
+    setSettings(res.data);
+    setSettingsForm(f => ({ ...f, ...res.data }));
+  };
+
+  const loadStays = async () => {
+    const [staysRes, bookingsRes] = await Promise.all([API.get('/api/stays'), API.get('/api/stays/bookings')]);
+    setStays(staysRes.data);
+    setStayBookings(bookingsRes.data);
   };
 
   const uploadImage = async (file, type) => {
@@ -196,6 +224,74 @@ export default function Admin() {
     loadAll();
   };
 
+  // ===== App Settings handlers =====
+  const saveSetting = async (key, value) => {
+    await API.post('/api/settings', { key, value });
+    loadSettings();
+  };
+
+  const saveAllSettings = async () => {
+    for (const key of ['tagline', 'support_email', 'support_phone', 'whatsapp_number', 'maintenance_mode']) {
+      await API.post('/api/settings', { key, value: settingsForm[key] || '' });
+    }
+    alert('✅ Settings saved!');
+    loadSettings();
+  };
+
+  const uploadTopBanner = async () => {
+    if (!topBannerRef.current?.files[0]) { alert('Photo select karo!'); return; }
+    const r = await uploadImage(topBannerRef.current.files[0], 'banner');
+    await saveSetting('top_banner_image', r.url);
+    if (topBannerRef.current) topBannerRef.current.value = '';
+    alert('✅ Top banner updated!');
+  };
+
+  const removeTopBanner = async () => {
+    await saveSetting('top_banner_image', '');
+    alert('✅ Removed!');
+  };
+
+  // ===== Stays handlers =====
+  const addStay = async () => {
+    if (!stayForm.name || !stayForm.price_per_night || !stayForm.address) { alert('Fill all required fields!'); return; }
+    let images = [];
+    if (stayImgRef.current?.files[0]) { const r = await uploadImage(stayImgRef.current.files[0], 'stay'); images = [r.url]; }
+    await API.post('/api/stays/add', { ...stayForm, price_per_night: parseInt(stayForm.price_per_night), images });
+    setStayForm({ name: '', type: 'Hotel', price_per_night: '', address: '', phone: '', amenities: '', description: '' });
+    if (stayImgRef.current) stayImgRef.current.value = '';
+    alert('✅ Stay added!');
+    loadStays();
+  };
+
+  const openEditStay = (stay) => {
+    let images = [];
+    try { images = stay.images ? JSON.parse(stay.images) : []; } catch {}
+    setEditStay({ ...stay, images });
+  };
+
+  const updateStay = async () => {
+    let images = editStay.images || [];
+    if (editStayImgRef.current?.files[0]) { const r = await uploadImage(editStayImgRef.current.files[0], 'stay'); images = [r.url]; }
+    await API.post('/api/stays/update', { ...editStay, price_per_night: parseInt(editStay.price_per_night), images });
+    setEditStay(null);
+    alert('✅ Stay updated!');
+    loadStays();
+  };
+
+  const deleteStay = async (id) => {
+    if (window.confirm('Delete this stay listing?')) {
+      await API.post('/api/stays/delete', { id });
+      loadStays();
+    }
+  };
+
+  const updateBookingStatus = async (id, status) => {
+    await API.post('/api/stays/bookings/status', { id, status });
+    loadStays();
+  };
+
+  const filteredBookings = stayBookings.filter(b => stayFilter === 'all' ? true : b.status === stayFilter);
+
   const pages = [
     { key: 'dashboard', icon: '📊', label: 'Dashboard' },
     { key: 'orders', icon: '📦', label: 'Orders' },
@@ -203,14 +299,17 @@ export default function Admin() {
     { key: 'menu', icon: '🍽️', label: 'Menu' },
     { key: 'delivery', icon: '🛵', label: 'Delivery Boys' },
     { key: 'settlements', icon: '💳', label: 'Settlements' },
+    { key: 'stays', icon: '🏨', label: 'Stays' },
     { key: 'tickets', icon: '🎫', label: 'Support Tickets' },
     { key: 'applications', icon: '📝', label: 'Applications' },
     { key: 'banners', icon: '🎨', label: 'Banners' },
     { key: 'coupons', icon: '🎟️', label: 'Coupons' },
     { key: 'users', icon: '👥', label: 'Users' },
+    { key: 'appsettings', icon: '⚙️', label: 'App Settings' },
   ];
 
   const { analytics } = data;
+  const pendingBookingsCount = stayBookings.filter(b => b.status === 'pending').length;
 
   return (
     <div style={s.container}>
@@ -223,6 +322,7 @@ export default function Admin() {
           <div key={p.key} style={{ ...s.menuItem, ...(page === p.key ? s.menuActive : {}) }} onClick={() => setPage(p.key)}>
             <span style={s.menuIcon}>{p.icon}</span><span>{p.label}</span>
             {p.key === 'tickets' && analytics.openTickets > 0 && <span style={s.sideBadge}>{analytics.openTickets}</span>}
+            {p.key === 'stays' && pendingBookingsCount > 0 && <span style={s.sideBadge}>{pendingBookingsCount}</span>}
           </div>
         ))}
         <div style={s.menuItem} onClick={() => navigate('/')}><span style={s.menuIcon}>🏠</span><span>Go to App</span></div>
@@ -344,6 +444,30 @@ export default function Admin() {
                 <button style={s.btnGreen} onClick={sendReply}>Send Reply</button>
                 <button style={s.btnConfirm} onClick={() => { updateTicketStatus(replyModal.id, 'resolved'); setReplyModal(null); }}>Mark Resolved</button>
                 <button style={s.btnRed} onClick={() => { setReplyModal(null); setReplyText(''); }}>Close</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {editStay && (
+          <div style={s.modal}>
+            <div style={s.modalBox}>
+              <h3 style={s.modalTitle}>Edit Stay — {editStay.name}</h3>
+              <input style={s.input} placeholder="Name" value={editStay.name} onChange={e => setEditStay({ ...editStay, name: e.target.value })} />
+              <select style={s.input} value={editStay.type} onChange={e => setEditStay({ ...editStay, type: e.target.value })}>
+                <option>Hotel</option><option>Apartment</option><option>Guesthouse</option><option>Homestay</option>
+              </select>
+              <input style={s.input} placeholder="Price per night (₹)" type="number" value={editStay.price_per_night} onChange={e => setEditStay({ ...editStay, price_per_night: e.target.value })} />
+              <input style={s.input} placeholder="Address" value={editStay.address} onChange={e => setEditStay({ ...editStay, address: e.target.value })} />
+              <input style={s.input} placeholder="Owner Phone" value={editStay.phone || ''} onChange={e => setEditStay({ ...editStay, phone: e.target.value })} />
+              <input style={s.input} placeholder="Amenities (comma separated)" value={editStay.amenities || ''} onChange={e => setEditStay({ ...editStay, amenities: e.target.value })} />
+              <textarea style={s.textarea} placeholder="Description" value={editStay.description || ''} onChange={e => setEditStay({ ...editStay, description: e.target.value })} />
+              <label style={s.uploadLabel}>📷 Change Photo:</label>
+              <input type="file" ref={editStayImgRef} accept="image/*" style={s.fileInput} />
+              {editStay.images && editStay.images[0] && <img src={editStay.images[0]} alt="" style={s.previewImg} />}
+              <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
+                <button style={s.btnGreen} onClick={updateStay}>Save Changes</button>
+                <button style={s.btnRed} onClick={() => setEditStay(null)}>Cancel</button>
               </div>
             </div>
           </div>
@@ -655,6 +779,92 @@ export default function Admin() {
             </div>
           )}
 
+          {/* STAYS */}
+          {page === 'stays' && (
+            <div>
+              <div style={s.formCard}>
+                <h3 style={s.tableTitle}>➕ Add Hotel / Apartment / Room</h3>
+                <div style={s.formGrid}>
+                  <input style={s.input} placeholder="Name *" value={stayForm.name} onChange={e => setStayForm({ ...stayForm, name: e.target.value })} />
+                  <select style={s.input} value={stayForm.type} onChange={e => setStayForm({ ...stayForm, type: e.target.value })}>
+                    <option>Hotel</option><option>Apartment</option><option>Guesthouse</option><option>Homestay</option>
+                  </select>
+                  <input style={s.input} placeholder="Price per night (₹) *" type="number" value={stayForm.price_per_night} onChange={e => setStayForm({ ...stayForm, price_per_night: e.target.value })} />
+                  <input style={s.input} placeholder="Address *" value={stayForm.address} onChange={e => setStayForm({ ...stayForm, address: e.target.value })} />
+                  <input style={s.input} placeholder="Owner Phone" value={stayForm.phone} onChange={e => setStayForm({ ...stayForm, phone: e.target.value })} />
+                  <input style={s.input} placeholder="Amenities (e.g. WiFi, AC, Parking)" value={stayForm.amenities} onChange={e => setStayForm({ ...stayForm, amenities: e.target.value })} />
+                </div>
+                <textarea style={s.textarea} placeholder="Description" value={stayForm.description} onChange={e => setStayForm({ ...stayForm, description: e.target.value })} />
+                <label style={s.uploadLabel}>📷 Photo:</label>
+                <input type="file" ref={stayImgRef} accept="image/*" style={s.fileInput} />
+                <button style={s.btnOrange} onClick={addStay}>➕ Add Stay</button>
+              </div>
+
+              <div style={s.tableCard}>
+                <h3 style={s.tableTitle}>🏨 All Listings ({stays.length})</h3>
+                {stays.length === 0 ? <p style={{ color: '#aaa', fontSize: '14px' }}>No stays added yet.</p> : (
+                  <table style={s.table}>
+                    <thead><tr>{['Photo', 'Name', 'Type', 'Price/Night', 'Address', 'Action'].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                    <tbody>
+                      {stays.map(st => {
+                        let imgs = [];
+                        try { imgs = st.images ? JSON.parse(st.images) : []; } catch {}
+                        return (
+                          <tr key={st.id}>
+                            <td style={s.td}>{imgs[0] ? <img src={imgs[0]} alt="" style={s.thumbImg} /> : <span style={{ fontSize: '24px' }}>🏨</span>}</td>
+                            <td style={s.td}><strong>{st.name}</strong></td>
+                            <td style={s.td}>{st.type}</td>
+                            <td style={s.td}>₹{st.price_per_night}</td>
+                            <td style={s.td}>{st.address}</td>
+                            <td style={s.td}>
+                              <button style={s.btnConfirm} onClick={() => openEditStay(st)}>Edit</button>
+                              <button style={{ ...s.btnRed, marginLeft: '5px' }} onClick={() => deleteStay(st.id)}>Delete</button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+
+              <div style={s.tableCard}>
+                <h3 style={s.tableTitle}>📩 Booking Requests</h3>
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '15px' }}>
+                  {['pending', 'confirmed', 'rejected', 'all'].map(f => (
+                    <div key={f} onClick={() => setStayFilter(f)} style={{ padding: '7px 14px', borderRadius: '20px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', background: stayFilter === f ? '#ff6b00' : 'white', color: stayFilter === f ? 'white' : '#555', border: '1px solid #e0e0e0', textTransform: 'capitalize' }}>{f}</div>
+                  ))}
+                </div>
+                {filteredBookings.length === 0 ? <p style={{ color: '#aaa', fontSize: '14px' }}>No booking requests here.</p> : (
+                  <table style={s.table}>
+                    <thead><tr>{['Stay', 'Customer', 'Phone', 'Check-in', 'Check-out', 'Guests', 'Status', 'Action'].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                    <tbody>
+                      {filteredBookings.map(b => (
+                        <tr key={b.id}>
+                          <td style={s.td}>{b.stay_name}</td>
+                          <td style={s.td}>{b.customer_name}</td>
+                          <td style={s.td}>{b.customer_phone}</td>
+                          <td style={s.td}>{b.check_in}</td>
+                          <td style={s.td}>{b.check_out}</td>
+                          <td style={s.td}>{b.guests}</td>
+                          <td style={s.td}><span style={{ ...s.badge2, ...getBadge(b.status) }}>{b.status}</span></td>
+                          <td style={s.td}>
+                            {b.status === 'pending' && (
+                              <>
+                                <button style={s.btnGreen} onClick={() => updateBookingStatus(b.id, 'confirmed')}>✅</button>
+                                <button style={{ ...s.btnRed, marginLeft: '5px' }} onClick={() => updateBookingStatus(b.id, 'rejected')}>❌</button>
+                              </>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* SUPPORT TICKETS */}
           {page === 'tickets' && (
             <div>
@@ -812,6 +1022,43 @@ export default function Admin() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {/* APP SETTINGS */}
+          {page === 'appsettings' && (
+            <div>
+              <div style={s.formCard}>
+                <h3 style={s.tableTitle}>🎨 Top Banner / Home Header Image</h3>
+                <p style={{ fontSize: '12px', color: '#888', marginBottom: '15px' }}>This shows at the very top of the Home page, above the Food/Dineout tabs. Leave empty to hide.</p>
+                {settings.top_banner_image && (
+                  <div style={{ marginBottom: '12px' }}>
+                    <img src={settings.top_banner_image} alt="" style={{ width: '100%', maxWidth: '300px', borderRadius: '12px', display: 'block', marginBottom: '10px' }} />
+                    <button style={s.btnRed} onClick={removeTopBanner}>Remove Image</button>
+                  </div>
+                )}
+                <input type="file" ref={topBannerRef} accept="image/*" style={s.fileInput} />
+                <button style={s.btnOrange} onClick={uploadTopBanner}>⬆️ Upload / Replace</button>
+              </div>
+
+              <div style={s.formCard}>
+                <h3 style={s.tableTitle}>⚙️ General Settings</h3>
+                <label style={s.uploadLabel}>App Tagline</label>
+                <input style={s.input} value={settingsForm.tagline} onChange={e => setSettingsForm({ ...settingsForm, tagline: e.target.value })} placeholder="Ghar tak, jhatpat!" />
+                <label style={s.uploadLabel}>Support Email</label>
+                <input style={s.input} value={settingsForm.support_email} onChange={e => setSettingsForm({ ...settingsForm, support_email: e.target.value })} placeholder="support@zeppo.in" />
+                <label style={s.uploadLabel}>Support Phone</label>
+                <input style={s.input} value={settingsForm.support_phone} onChange={e => setSettingsForm({ ...settingsForm, support_phone: e.target.value })} placeholder="+91-7006XXXXXX" />
+                <label style={s.uploadLabel}>WhatsApp Number (for quick support link)</label>
+                <input style={s.input} value={settingsForm.whatsapp_number} onChange={e => setSettingsForm({ ...settingsForm, whatsapp_number: e.target.value })} placeholder="917006XXXXXX" />
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '15px 0', fontSize: '14px', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={settingsForm.maintenance_mode === 'on'} onChange={e => setSettingsForm({ ...settingsForm, maintenance_mode: e.target.checked ? 'on' : 'off' })} />
+                  🚧 Maintenance Mode (temporarily disable ordering for customers)
+                </label>
+
+                <button style={s.btnOrange} onClick={saveAllSettings}>💾 Save All Settings</button>
+              </div>
             </div>
           )}
 

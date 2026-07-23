@@ -3,6 +3,27 @@ import { useNavigate } from 'react-router-dom';
 import { useCart } from '../App';
 import API from '../api';
 
+const FoodIcon = ({ color = 'white', size = 20 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <path d="M4 10h16a1 1 0 0 1 1 1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1a1 1 0 0 1 1-1z" stroke={color} strokeWidth="1.8" strokeLinejoin="round"/>
+    <path d="M5 14l1 6h12l1-6" stroke={color} strokeWidth="1.8" strokeLinejoin="round"/>
+    <path d="M12 10c0-3 2-5 2-7" stroke={color} strokeWidth="1.8" strokeLinecap="round"/>
+  </svg>
+);
+const DineIcon = ({ color = 'white', size = 20 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <path d="M6 2v8a2 2 0 0 0 4 0V2M8 10v12M18 2v8a3 3 0 0 1-3 3M18 2v20" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+const StayIcon = ({ color = 'white', size = 20 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <path d="M3 21h18M5 21V9l7-5 7 5v12M9 21v-6h6v6" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+const SearchIconSvg = ({ color = '#aaa', size = 16 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke={color} strokeWidth="2"/><path d="M21 21l-4.35-4.35" stroke={color} strokeWidth="2" strokeLinecap="round"/></svg>
+);
+
 export default function Home() {
   const navigate = useNavigate();
   const { cartCount } = useCart();
@@ -19,9 +40,18 @@ export default function Home() {
   const [activeCategory, setActiveCategory] = useState('All');
   const [loading, setLoading] = useState(true);
   const [vegMode, setVegMode] = useState(false);
-  const [activeNav, setActiveNav] = useState('home');
   const [showSearch, setShowSearch] = useState(false);
   const [bookModal, setBookModal] = useState(null);
+  const [vegModalOpen, setVegModalOpen] = useState(false);
+  const [vegModalChoice, setVegModalChoice] = useState('all');
+  const [settings, setSettings] = useState({});
+
+  // Stays state
+  const [stays, setStays] = useState([]);
+  const [staysLoading, setStaysLoading] = useState(true);
+  const [stayBookModal, setStayBookModal] = useState(null);
+  const [stayBookForm, setStayBookForm] = useState({ customer_name: '', customer_phone: '', check_in: '', check_out: '', guests: 1 });
+  const [stayBookSent, setStayBookSent] = useState(false);
 
   const role = localStorage.getItem('role');
   const location = localStorage.getItem('location') || 'Kupwara';
@@ -33,44 +63,48 @@ export default function Home() {
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [restRes, orderRes, bannerRes] = await Promise.all([
+      const [restRes, orderRes, bannerRes, settingsRes] = await Promise.all([
         API.get('/api/restaurants'),
         API.get('/api/my-orders', { headers: { Authorization: `Bearer ${token}` } }),
         API.get('/api/banners'),
+        API.get('/api/settings'),
       ]);
-
       const rests = restRes.data;
       setRestaurants(rests);
       setRecentOrders(orderRes.data.slice(0, 3));
       setBanners(bannerRes.data);
-
+      setSettings(settingsRes.data);
       const allItems = [];
       for (const r of rests) {
         try {
           const menuRes = await API.get(`/api/menu/${r.id}`);
-          menuRes.data.forEach(item => allItems.push({
-            ...item,
-            restaurant_name: r.name,
-            restaurant_id: r.id,
-            restaurant_emoji: r.emoji,
-          }));
+          menuRes.data.forEach(item => allItems.push({ ...item, restaurant_name: r.name, restaurant_id: r.id, restaurant_emoji: r.emoji }));
         } catch(e) {}
       }
       setMenuItems(allItems);
       setFilteredItems(allItems);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
   }, [token]);
+
+  const loadStays = useCallback(async () => {
+    try {
+      setStaysLoading(true);
+      const res = await API.get('/api/stays');
+      setStays(res.data);
+    } catch(e) { console.error(e); }
+    finally { setStaysLoading(false); }
+  }, []);
 
   useEffect(() => {
     if (!token) { navigate('/login'); return; }
     loadData();
   }, [token, loadData, navigate]);
 
-  // Filtered banner groups
+  useEffect(() => {
+    if (activeTab === 'stays' && stays.length === 0) loadStays();
+  }, [activeTab, stays.length, loadStays]);
+
   const foodTopBanners = banners.filter(b => (b.category || 'food') === 'food' && (b.position || 'top') === 'top');
   const foodMiddleBanners = banners.filter(b => (b.category || 'food') === 'food' && b.position === 'middle');
   const dineoutTopBanners = banners.filter(b => b.category === 'dineout' && (b.position || 'top') === 'top');
@@ -78,30 +112,26 @@ export default function Home() {
 
   useEffect(() => {
     if (foodTopBanners.length <= 1) return;
-    const timer = setInterval(() => setActiveBanner(p => (p + 1) % foodTopBanners.length), 4500);
-    return () => clearInterval(timer);
+    const t = setInterval(() => setActiveBanner(p => (p + 1) % foodTopBanners.length), 4500);
+    return () => clearInterval(t);
   }, [foodTopBanners.length]);
 
   useEffect(() => {
     if (foodMiddleBanners.length <= 1) return;
-    const timer = setInterval(() => setActiveMiddleBanner(p => (p + 1) % foodMiddleBanners.length), 5000);
-    return () => clearInterval(timer);
+    const t = setInterval(() => setActiveMiddleBanner(p => (p + 1) % foodMiddleBanners.length), 5000);
+    return () => clearInterval(t);
   }, [foodMiddleBanners.length]);
 
   useEffect(() => {
     if (dineoutTopBanners.length <= 1) return;
-    const timer = setInterval(() => setActiveDineoutBanner(p => (p + 1) % dineoutTopBanners.length), 4500);
-    return () => clearInterval(timer);
+    const t = setInterval(() => setActiveDineoutBanner(p => (p + 1) % dineoutTopBanners.length), 4500);
+    return () => clearInterval(t);
   }, [dineoutTopBanners.length]);
 
   useEffect(() => {
     let items = menuItems;
     if (search) {
-      items = items.filter(i =>
-        i.name.toLowerCase().includes(search.toLowerCase()) ||
-        i.category.toLowerCase().includes(search.toLowerCase()) ||
-        i.restaurant_name.toLowerCase().includes(search.toLowerCase())
-      );
+      items = items.filter(i => i.name.toLowerCase().includes(search.toLowerCase()) || i.category.toLowerCase().includes(search.toLowerCase()) || i.restaurant_name.toLowerCase().includes(search.toLowerCase()));
     } else if (activeCategory !== 'All') {
       items = items.filter(i => i.category.toLowerCase().includes(activeCategory.toLowerCase()));
     }
@@ -111,15 +141,13 @@ export default function Home() {
 
   const handleSearch = (q) => {
     setSearch(q);
-    setActiveCategory('All');
-    setShowSearch(!!q);
     let items = menuItems;
     if (q) {
-      items = items.filter(i =>
-        i.name.toLowerCase().includes(q.toLowerCase()) ||
-        i.category.toLowerCase().includes(q.toLowerCase()) ||
-        i.restaurant_name.toLowerCase().includes(q.toLowerCase())
-      );
+      const ql = q.toLowerCase();
+      items = items.filter(i => {
+        const hay = `${i.name} ${i.category} ${i.restaurant_name}`.toLowerCase();
+        return ql.split(' ').every(word => word === '' || hay.includes(word));
+      });
     }
     if (vegMode) items = items.filter(isVeg);
     setFilteredItems(items);
@@ -134,14 +162,12 @@ export default function Home() {
     setFilteredItems(items);
   };
 
-  const displayedRestaurants = vegMode
-    ? restaurants.filter(r => menuItems.some(i => i.restaurant_id === r.id && isVeg(i)))
-    : restaurants;
+  const openVegModal = () => { setVegModalChoice(vegMode ? 'veg' : 'all'); setVegModalOpen(true); };
+  const applyVegModal = () => { setVegMode(vegModalChoice === 'veg'); setVegModalOpen(false); };
 
-  const statusColors = {
-    pending: '#f39c12', confirmed: '#3498db',
-    preparing: '#9b59b6', on_the_way: '#e67e22', delivered: '#27ae60'
-  };
+  const displayedRestaurants = vegMode ? restaurants.filter(r => menuItems.some(i => i.restaurant_id === r.id && isVeg(i))) : restaurants;
+
+  const statusColors = { pending: '#f39c12', confirmed: '#3498db', preparing: '#9b59b6', on_the_way: '#e67e22', delivered: '#27ae60' };
 
   const categories = [
     { img: 'https://images.unsplash.com/photo-1633945274405-b6c8069047b0?w=200&h=200&fit=crop&q=80', emoji: '🍽️', name: 'All' },
@@ -163,29 +189,42 @@ export default function Home() {
     { emoji: '🏪', title: 'All Stores', sub: 'Explore', bg: 'linear-gradient(135deg,#7c2d12,#431407)', action: () => navigate('/stores') },
   ];
 
-  const renderBannerCarousel = (list, active, onClick) => {
+  const renderBannerCarousel = (list, active) => {
     if (list.length === 0) return null;
     const b = list[active % list.length];
     return (
       <div style={s.bigBanner}>
         <div key={b.id} style={s.bannerSlide}>
-          {b.is_video ? (
-            <video src={b.image} autoPlay muted loop playsInline style={s.bannerMedia} />
-          ) : (
-            <img src={b.image} alt={b.title} style={s.bannerMedia} />
-          )}
+          {b.is_video ? <video src={b.image} autoPlay muted loop playsInline style={s.bannerMedia} /> : <img src={b.image} alt={b.title} style={s.bannerMedia} />}
           <div style={s.bannerOverlay} />
           <div style={s.bannerTextBox}>
             <div style={s.bigBannerTag}>⚡ EXCLUSIVE</div>
             <div style={s.bigBannerTitle}>{b.title}</div>
             <div style={s.bigBannerSub}>{b.subtitle}</div>
-            <div style={s.bigBannerBtn} onClick={(e) => { e.stopPropagation(); if (b.link) navigate(b.link); }}>
-              {b.button_text || 'ORDER NOW'}
-            </div>
+            <div style={s.bigBannerBtn} onClick={(e) => { e.stopPropagation(); if (b.link) navigate(b.link); }}>{b.button_text || 'ORDER NOW'}</div>
           </div>
         </div>
       </div>
     );
+  };
+
+  const openStayBook = (stay) => {
+    setStayBookModal(stay);
+    setStayBookForm({ customer_name: localStorage.getItem('name') || '', customer_phone: '', check_in: '', check_out: '', guests: 1 });
+    setStayBookSent(false);
+  };
+
+  const submitStayBooking = async () => {
+    const { customer_name, customer_phone, check_in, check_out, guests } = stayBookForm;
+    if (!customer_name || !customer_phone || !check_in || !check_out) { alert('Please fill all fields!'); return; }
+    try {
+      const token = localStorage.getItem('token');
+      await API.post('/api/stays/book', {
+        stay_id: stayBookModal.id, stay_name: stayBookModal.name,
+        customer_name, customer_phone, check_in, check_out, guests
+      }, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      setStayBookSent(true);
+    } catch (e) { alert('Error sending booking request!'); }
   };
 
   if (loading) return (
@@ -196,67 +235,193 @@ export default function Home() {
     </div>
   );
 
-  // ===== DINEOUT TAB =====
-  if (activeTab === 'dineout') {
+  // ===== FULL-SCREEN SEARCH =====
+  if (showSearch) {
+    return (
+      <div style={s.searchPage}>
+        <div style={s.searchTopBar}>
+          <button style={s.searchBackBtn} onClick={() => { setShowSearch(false); setSearch(''); handleSearch(''); }}>←</button>
+          <div style={s.searchInputWrap}>
+            <SearchIconSvg />
+            <input autoFocus style={s.searchTopInput} placeholder="Search for dishes & restaurants" value={search} onChange={e => handleSearch(e.target.value)} />
+            {search && <span style={{ cursor: 'pointer', color: '#aaa', fontSize: '14px' }} onClick={() => handleSearch('')}>✕</span>}
+          </div>
+        </div>
+        <div style={s.searchBody}>
+          {!search ? (
+            <>
+              <div style={s.searchSectionLabel}>Popular Categories</div>
+              <div style={s.searchCatGrid}>
+                {categories.filter(c => c.name !== 'All').map(cat => (
+                  <div key={cat.name} style={s.searchCatCard} onClick={() => { setSearch(cat.name); handleSearch(cat.name); }}>
+                    <img src={cat.img} alt={cat.name} style={s.searchCatImg} onError={e => { e.target.outerHTML = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px;background:#f5f5f5;">${cat.emoji}</div>`; }} />
+                    <div style={s.searchCatName}>{cat.name}</div>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={s.searchSectionLabel}>{filteredItems.length} results for "{search}"</div>
+              {filteredItems.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '50px 20px' }}><div style={{ fontSize: '45px', marginBottom: '12px' }}>😔</div><p style={{ color: '#888' }}>No dishes found for "{search}"</p></div>
+              ) : (
+                <div style={s.searchResultsGrid}>
+                  {filteredItems.map((item, i) => (
+                    <div key={i} style={s.searchResultCard} onClick={() => navigate(`/order/${item.restaurant_id}`)}>
+                      <div style={s.searchResultImg}>{item.image ? <img src={item.image} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.target.style.display = 'none'; }} /> : <div style={{ fontSize: '30px', display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>{item.restaurant_emoji || '🍽️'}</div>}</div>
+                      <div style={{ padding: '10px 12px', flex: 1 }}>
+                        <div style={s.vegDotBadge(isVeg(item))} />
+                        <div style={s.searchResultName}>{item.name}</div>
+                        <div style={s.searchResultRest}>{item.restaurant_name}</div>
+                        <div style={s.searchResultPrice}>₹{item.price}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ===== STAYS TAB =====
+  if (activeTab === 'stays') {
     return (
       <div style={s.container}>
-        <style>{`@keyframes fadeBanner { from { opacity: 0; } to { opacity: 1; } }`}</style>
-
-        {bookModal && (
-          <div style={s.bookModalOverlay} onClick={() => setBookModal(null)}>
-            <div style={s.bookModalBox} onClick={e => e.stopPropagation()}>
-              <div style={{ fontSize: '40px', marginBottom: '10px' }}>🍽️</div>
-              <div style={{ fontSize: '17px', fontWeight: '800', color: '#222', marginBottom: '6px' }}>Book a Table at {bookModal.name}</div>
-              <div style={{ fontSize: '13px', color: '#888', marginBottom: '20px' }}>Table booking is launching soon! Call the restaurant directly to reserve for now.</div>
-              {bookModal.phone && (
-                <a href={`tel:${bookModal.phone}`} style={s.callBtn}>📞 Call {bookModal.phone}</a>
+        {stayBookModal && (
+          <div style={s.bookModalOverlay} onClick={() => setStayBookModal(null)}>
+            <div style={s.stayBookBox} onClick={e => e.stopPropagation()}>
+              {stayBookSent ? (
+                <div style={{ textAlign: 'center', padding: '10px 0' }}>
+                  <div style={{ fontSize: '44px', marginBottom: '10px' }}>✅</div>
+                  <div style={{ fontSize: '17px', fontWeight: '800', color: '#222', marginBottom: '6px' }}>Request Sent!</div>
+                  <div style={{ fontSize: '13px', color: '#888', marginBottom: '20px' }}>We'll confirm your booking at {stayBookModal.name} soon. You may also get a call for confirmation.</div>
+                  <button style={s.closeBookBtn} onClick={() => setStayBookModal(null)}>Close</button>
+                </div>
+              ) : (
+                <>
+                  <div style={{ fontSize: '17px', fontWeight: '800', color: '#222', marginBottom: '4px' }}>Book {stayBookModal.name}</div>
+                  <div style={{ fontSize: '13px', color: '#888', marginBottom: '18px' }}>₹{stayBookModal.price_per_night}/night · {stayBookModal.address}</div>
+                  <input style={s.input} placeholder="Your Name *" value={stayBookForm.customer_name} onChange={e => setStayBookForm({ ...stayBookForm, customer_name: e.target.value })} />
+                  <input style={s.input} placeholder="Phone Number *" value={stayBookForm.customer_phone} onChange={e => setStayBookForm({ ...stayBookForm, customer_phone: e.target.value })} />
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={s.smallLabel}>Check-in</label>
+                      <input style={s.input} type="date" value={stayBookForm.check_in} onChange={e => setStayBookForm({ ...stayBookForm, check_in: e.target.value })} />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label style={s.smallLabel}>Check-out</label>
+                      <input style={s.input} type="date" value={stayBookForm.check_out} onChange={e => setStayBookForm({ ...stayBookForm, check_out: e.target.value })} />
+                    </div>
+                  </div>
+                  <label style={s.smallLabel}>Guests</label>
+                  <input style={s.input} type="number" min="1" value={stayBookForm.guests} onChange={e => setStayBookForm({ ...stayBookForm, guests: e.target.value })} />
+                  <button style={s.stayBookBtn} onClick={submitStayBooking}>Send Booking Request</button>
+                  <button style={s.closeBookBtn} onClick={() => setStayBookModal(null)}>Cancel</button>
+                </>
               )}
-              <button style={s.closeBookBtn} onClick={() => setBookModal(null)}>Close</button>
             </div>
           </div>
         )}
 
         <div style={s.header}>
           <div style={s.headerLeft} onClick={() => navigate('/location')}>
-            <div style={s.locationRow}>
-              <span style={s.locationName}>{location}</span>
-              <span style={s.locationArrow}>›</span>
-            </div>
+            <div style={s.locationRow}><span style={s.locationName}>{location}</span><span style={s.locationArrow}>›</span></div>
             <div style={s.locationSub}>{locationSub}</div>
           </div>
         </div>
         <div style={s.tabs}>
-          {[{ key: 'food', emoji: '🍔', label: 'Food' }, { key: 'dineout', emoji: '🍽️', label: 'Dineout' }].map(tab => (
-            <div key={tab.key} style={{ ...s.tab, ...(activeTab === tab.key ? s.tabActive : {}) }} onClick={() => setActiveTab(tab.key)}>
-              <span style={s.tabEmoji}>{tab.emoji}</span>
-              <span style={{ ...s.tabLabel, color: activeTab === tab.key ? 'white' : '#888' }}>{tab.label}</span>
-            </div>
-          ))}
+          <div style={s.tab} onClick={() => setActiveTab('food')}><FoodIcon color="#888" /><span style={{ ...s.tabLabel, color: '#888' }}>Food</span></div>
+          <div style={s.tab} onClick={() => setActiveTab('dineout')}><DineIcon color="#888" /><span style={{ ...s.tabLabel, color: '#888' }}>Dineout</span></div>
+          <div style={{ ...s.tab, ...s.tabActive }}><StayIcon color="white" /><span style={{ ...s.tabLabel, color: 'white' }}>Stays</span></div>
         </div>
 
         <div style={s.whiteSection}>
-          {/* Top dineout banner — only from Admin panel */}
+          <div style={s.section}>
+            <div style={s.sectionTitle}>🏨 Hotels & Rooms in {location}</div>
+            <div style={s.sectionSub}>Coming to town? Book a place to stay</div>
+            {staysLoading ? (
+              <div style={{ textAlign: 'center', padding: '30px' }}>Loading...</div>
+            ) : stays.length === 0 ? (
+              <div style={s.noRest}><div style={{ fontSize: '50px', marginBottom: '10px' }}>🏨</div><p style={{ color: '#888' }}>No stays listed yet — check back soon!</p></div>
+            ) : (
+              stays.map(st => {
+                let imgs = [];
+                try { imgs = st.images ? JSON.parse(st.images) : []; } catch {}
+                let amenities = st.amenities ? st.amenities.split(',').map(a => a.trim()).filter(Boolean) : [];
+                return (
+                  <div key={st.id} style={s.stayCard} onClick={() => openStayBook(st)}>
+                    <div style={s.stayImgBox}>
+                      {imgs[0] ? <img src={imgs[0]} alt={st.name} style={s.stayImg} /> : <div style={s.stayImgFallback}>🏨</div>}
+                      <div style={s.stayTypeBadge}>{st.type}</div>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={s.restName}>{st.name}</div>
+                      <div style={s.restMetaRow}><span style={s.ratingBadge}>⭐ {st.rating}</span><span style={s.metaDot}>•</span><span style={s.timeText}>{st.type}</span></div>
+                      <div style={s.restAddr}>📍 {st.address}</div>
+                      {amenities.length > 0 && (
+                        <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginTop: '5px' }}>
+                          {amenities.slice(0, 3).map((a, i) => <span key={i} style={s.amenityChip}>{a}</span>)}
+                        </div>
+                      )}
+                      <div style={s.stayPriceRow}>
+                        <span style={s.stayPrice}>₹{st.price_per_night}<span style={{ fontSize: '11px', fontWeight: '500', color: '#888' }}>/night</span></span>
+                        <span style={s.bookNowText}>Book Now →</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+        <BottomNav navigate={navigate} active="home" cartCount={cartCount} onHome={() => setActiveTab('food')} />
+      </div>
+    );
+  }
+
+  // ===== DINEOUT TAB =====
+  if (activeTab === 'dineout') {
+    return (
+      <div style={s.container}>
+        <style>{`@keyframes fadeBanner { from { opacity: 0; } to { opacity: 1; } }`}</style>
+        {bookModal && (
+          <div style={s.bookModalOverlay} onClick={() => setBookModal(null)}>
+            <div style={s.bookModalBox} onClick={e => e.stopPropagation()}>
+              <div style={{ fontSize: '40px', marginBottom: '10px' }}>🍽️</div>
+              <div style={{ fontSize: '17px', fontWeight: '800', color: '#222', marginBottom: '6px' }}>Book a Table at {bookModal.name}</div>
+              <div style={{ fontSize: '13px', color: '#888', marginBottom: '20px' }}>Table booking is launching soon! Call the restaurant directly to reserve for now.</div>
+              {bookModal.phone && <a href={`tel:${bookModal.phone}`} style={s.callBtn}>📞 Call {bookModal.phone}</a>}
+              <button style={s.closeBookBtn} onClick={() => setBookModal(null)}>Close</button>
+            </div>
+          </div>
+        )}
+        <div style={s.header}>
+          <div style={s.headerLeft} onClick={() => navigate('/location')}>
+            <div style={s.locationRow}><span style={s.locationName}>{location}</span><span style={s.locationArrow}>›</span></div>
+            <div style={s.locationSub}>{locationSub}</div>
+          </div>
+        </div>
+        <div style={s.tabs}>
+          <div style={{ ...s.tab, ...s.tabActive }} onClick={() => setActiveTab('food')}><FoodIcon color="white" /><span style={{ ...s.tabLabel, color: 'white' }}>Food</span></div>
+          <div style={s.tab} onClick={() => setActiveTab('dineout')}><DineIcon color="#888" /><span style={{ ...s.tabLabel, color: '#888' }}>Dineout</span></div>
+          <div style={s.tab} onClick={() => setActiveTab('stays')}><StayIcon color="#888" /><span style={{ ...s.tabLabel, color: '#888' }}>Stays</span></div>
+        </div>
+        <div style={s.whiteSection}>
           {dineoutTopBanners.length > 0 && (
             <div style={{ padding: '16px 16px 5px' }}>
-              <div style={s.bigBannerWrap2}>
-                {renderBannerCarousel(dineoutTopBanners, activeDineoutBanner)}
-                {dineoutTopBanners.length > 1 && (
-                  <div style={s.bannerDots}>
-                    {dineoutTopBanners.map((_, i) => <div key={i} style={{ ...s.dot, background: i === activeDineoutBanner ? '#ff6b00' : '#ddd', width: i === activeDineoutBanner ? '18px' : '6px' }} onClick={() => setActiveDineoutBanner(i)} />)}
-                  </div>
-                )}
-              </div>
+              {renderBannerCarousel(dineoutTopBanners, activeDineoutBanner)}
+              {dineoutTopBanners.length > 1 && <div style={s.bannerDots}>{dineoutTopBanners.map((_, i) => <div key={i} style={{ ...s.dot, background: i === activeDineoutBanner ? '#ff6b00' : '#ddd', width: i === activeDineoutBanner ? '18px' : '6px' }} onClick={() => setActiveDineoutBanner(i)} />)}</div>}
             </div>
           )}
-
           <div style={s.section}>
             <div style={s.sectionTitle}>🍽️ Restaurants Near You</div>
             <div style={s.sectionSub}>Book a table & enjoy dine-in experience</div>
             {restaurants.length === 0 ? (
-              <div style={s.noRest}>
-                <div style={{ fontSize: '50px', marginBottom: '10px' }}>😔</div>
-                <p style={{ color: '#888' }}>No restaurants available for dine-in yet</p>
-              </div>
+              <div style={s.noRest}><div style={{ fontSize: '50px', marginBottom: '10px' }}>😔</div><p style={{ color: '#888' }}>No restaurants available for dine-in yet</p></div>
             ) : (
               restaurants.map((r, idx) => (
                 <React.Fragment key={r.id}>
@@ -267,327 +432,196 @@ export default function Home() {
                     </div>
                     <div style={{ flex: 1 }}>
                       <div style={s.restName}>{r.name}</div>
-                      <div style={s.restMetaRow}>
-                        <span style={s.ratingBadge}>⭐ {r.rating}</span>
-                        <span style={s.metaDot}>•</span>
-                        <span style={s.timeText}>{r.category}</span>
-                      </div>
+                      <div style={s.restMetaRow}><span style={s.ratingBadge}>⭐ {r.rating}</span><span style={s.metaDot}>•</span><span style={s.timeText}>{r.category}</span></div>
                       <div style={s.restAddr}>📍 {r.address}</div>
                       <div style={s.bookNowText}>Book a Table →</div>
                     </div>
                   </div>
-                  {/* Middle dineout banner inserted after 2nd restaurant */}
-                  {idx === 1 && dineoutMiddleBanners.length > 0 && (
-                    <div style={{ margin: '15px 0' }}>
-                      {renderBannerCarousel(dineoutMiddleBanners, 0)}
-                    </div>
-                  )}
+                  {idx === 1 && dineoutMiddleBanners.length > 0 && <div style={{ margin: '15px 0' }}>{renderBannerCarousel(dineoutMiddleBanners, 0)}</div>}
                 </React.Fragment>
               ))
             )}
           </div>
         </div>
-
         <BottomNav navigate={navigate} active="home" cartCount={cartCount} onHome={() => setActiveTab('food')} />
       </div>
     );
   }
 
+  // ===== FOOD TAB (default) =====
   return (
     <div style={s.container}>
-      <style>{`
-        @keyframes fadeBanner { from { opacity: 0; } to { opacity: 1; } }
-      `}</style>
+      <style>{`@keyframes fadeBanner { from { opacity: 0; } to { opacity: 1; } }`}</style>
+
+      {vegModalOpen && (
+        <div style={s.vegModalOverlay} onClick={() => setVegModalOpen(false)}>
+          <div style={s.vegModalBox} onClick={e => e.stopPropagation()}>
+            <div style={s.vegModalHeader}>
+              <div style={s.vegModalTitle}>I want to see<br/>veg choices from</div>
+              <span style={{ fontSize: '30px' }}>🥗</span>
+            </div>
+            <div style={s.vegModalDivider} />
+            <div style={s.vegModalOption} onClick={() => setVegModalChoice('all')}>
+              <span style={s.vegModalOptionText}>All restaurants</span>
+              <div style={{ ...s.radioOuterGreen, borderColor: vegModalChoice === 'all' ? '#27ae60' : '#ccc' }}>{vegModalChoice === 'all' && <div style={s.radioInnerGreen} />}</div>
+            </div>
+            <div style={s.vegModalOption} onClick={() => setVegModalChoice('veg')}>
+              <span style={s.vegModalOptionText}>Pure veg restaurants only</span>
+              <div style={{ ...s.radioOuterGreen, borderColor: vegModalChoice === 'veg' ? '#27ae60' : '#ccc' }}>{vegModalChoice === 'veg' && <div style={s.radioInnerGreen} />}</div>
+            </div>
+            <button style={s.vegModalBtn} onClick={applyVegModal}>Show restaurants</button>
+          </div>
+        </div>
+      )}
+
+      {/* Top branding banner from App Settings */}
+      {settings.top_banner_image && (
+        <div style={s.topBrandBanner}>
+          <img src={settings.top_banner_image} alt="ZEPPO" style={s.topBrandImg} />
+        </div>
+      )}
 
       <div style={s.header}>
         <div style={s.headerLeft} onClick={() => navigate('/location')}>
-          <div style={s.locationRow}>
-            <span style={s.locationName}>{location.length > 18 ? location.slice(0, 18) + '...' : location}</span>
-            <span style={s.locationArrow}>›</span>
-          </div>
+          <div style={s.locationRow}><span style={s.locationName}>{location.length > 18 ? location.slice(0, 18) + '...' : location}</span><span style={s.locationArrow}>›</span></div>
           <div style={s.locationSub}>{locationSub.length > 30 ? locationSub.slice(0, 30) + '...' : locationSub}</div>
         </div>
         <div style={s.headerRight}>
           {role === 'admin' && <div style={s.adminBtn} onClick={() => navigate('/admin')}>Admin</div>}
-          <div style={s.menuBtn} onClick={() => navigate('/profile')}>
-            <div style={s.menuLine} />
-            <div style={s.menuLine} />
-            <div style={s.menuLine} />
-          </div>
+          <div style={s.menuBtn} onClick={() => navigate('/profile')}><div style={s.menuLine} /><div style={s.menuLine} /><div style={s.menuLine} /></div>
         </div>
       </div>
 
       <div style={s.tabs}>
-        {[{ key: 'food', emoji: '🍔', label: 'Food' }, { key: 'dineout', emoji: '🍽️', label: 'Dineout' }].map(tab => (
-          <div key={tab.key} style={{ ...s.tab, ...(activeTab === tab.key ? s.tabActive : {}) }} onClick={() => setActiveTab(tab.key)}>
-            <span style={s.tabEmoji}>{tab.emoji}</span>
-            <span style={{ ...s.tabLabel, color: activeTab === tab.key ? 'white' : '#888' }}>{tab.label}</span>
-          </div>
-        ))}
+        <div style={{ ...s.tab, ...s.tabActive }}><FoodIcon color="white" /><span style={{ ...s.tabLabel, color: 'white' }}>Food</span></div>
+        <div style={s.tab} onClick={() => setActiveTab('dineout')}><DineIcon color="#888" /><span style={{ ...s.tabLabel, color: '#888' }}>Dineout</span></div>
+        <div style={s.tab} onClick={() => setActiveTab('stays')}><StayIcon color="#888" /><span style={{ ...s.tabLabel, color: '#888' }}>Stays</span></div>
       </div>
 
       <div style={s.searchWrap}>
-        <div style={s.searchBox}>
-          <span style={s.searchIcon}>🔍</span>
-          <input
-            style={s.searchInput}
-            placeholder="Search for food..."
-            value={search}
-            onChange={e => handleSearch(e.target.value)}
-          />
-          {search && <span style={s.clearSearchBtn} onClick={() => handleSearch('')}>✕</span>}
+        <div style={s.searchBox} onClick={() => setShowSearch(true)}>
+          <SearchIconSvg color="#aaa" />
+          <div style={s.searchInputFake}>Search for food...</div>
         </div>
-        <div style={s.vegToggle} onClick={() => setVegMode(!vegMode)}>
+        <div style={s.vegToggle} onClick={openVegModal}>
           <div style={s.vegLabel}>VEG</div>
-          <div style={{ ...s.vegSwitch, background: vegMode ? '#27ae60' : '#555' }}>
-            <div style={{ ...s.vegDot, left: vegMode ? '14px' : '2px' }} />
-          </div>
+          <div style={{ ...s.vegSwitch, background: vegMode ? '#27ae60' : '#555' }}><div style={{ ...s.vegDot, left: vegMode ? '14px' : '2px' }} /></div>
         </div>
       </div>
 
-      {showSearch && (
-        <div style={s.searchResults}>
-          <div style={s.searchResultsHeader}>
-            <div style={s.searchResultsTitle}>
-              🔍 Results for "{search}" — {filteredItems.length} items
-            </div>
-            <div style={s.closeSearch} onClick={() => handleSearch('')}>✕ Close</div>
-          </div>
-          {filteredItems.length === 0 ? (
-            <div style={s.noResult}>
-              <div style={{ fontSize: '40px', marginBottom: '10px' }}>😔</div>
-              <p style={{ color: '#888' }}>No food found for "{search}"</p>
-            </div>
-          ) : (
-            <div style={s.searchGrid}>
-              {filteredItems.map((item, i) => (
-                <div key={i} style={s.searchFoodCard} onClick={() => navigate(`/order/${item.restaurant_id}`)}>
-                  <div style={s.searchFoodImg}>
-                    {item.image ? (
-                      <img src={item.image} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                        onError={e => { e.target.style.display = 'none'; }} />
-                    ) : (
-                      <div style={{ fontSize: '35px', display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-                        {item.restaurant_emoji || '🍽️'}
-                      </div>
-                    )}
-                  </div>
-                  <div style={s.searchFoodInfo}>
-                    <div style={s.vegDotBadge(isVeg(item))} />
-                    <div style={s.searchFoodName}>{item.name}</div>
-                    <div style={s.searchFoodRest}>{item.restaurant_name}</div>
-                    <div style={s.searchFoodPrice}>₹{item.price}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          <div style={s.searchStoresTitle}>🏪 All Stores</div>
-          {displayedRestaurants.map(r => (
-            <div key={r.id} style={s.searchStoreCard}
-              onClick={() => navigate(`/order/${r.id}`)}>
-              <div style={s.searchStoreThumb}>
-                {r.image ? (
-                  <img src={r.image} alt={r.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                ) : (
-                  <div style={{ fontSize: '30px', display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>{r.emoji || '🍽️'}</div>
-                )}
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={s.searchStoreName}>{r.name}</div>
-                <div style={s.searchStoreMeta}>⭐ {r.rating} • 30-40 min • {r.category}</div>
-                <div style={{ fontSize: '11px', color: '#ff6b00', fontWeight: '600' }}>🎉 Free delivery</div>
-              </div>
-            </div>
-          ))}
+      {foodTopBanners.length > 0 && (
+        <div style={s.bigBannerWrap}>
+          {renderBannerCarousel(foodTopBanners, activeBanner)}
+          {foodTopBanners.length > 1 && <div style={s.bannerDots}>{foodTopBanners.map((_, i) => <div key={i} style={{ ...s.dot, background: i === activeBanner ? '#ff6b00' : '#ddd', width: i === activeBanner ? '20px' : '6px' }} onClick={() => setActiveBanner(i)} />)}</div>}
         </div>
       )}
 
-      {!showSearch && (
-        <>
-          {/* TOP banner — only food+top category */}
-          {foodTopBanners.length > 0 && (
-            <div style={s.bigBannerWrap}>
-              {renderBannerCarousel(foodTopBanners, activeBanner)}
-              {foodTopBanners.length > 1 && (
-                <div style={s.bannerDots}>
-                  {foodTopBanners.map((_, i) => (
-                    <div key={i} style={{ ...s.dot, background: i === activeBanner ? '#ff6b00' : '#ddd', width: i === activeBanner ? '20px' : '6px' }} onClick={() => setActiveBanner(i)} />
-                  ))}
+      <div style={s.whiteSection}>
+        <div style={s.section}>
+          <div style={s.sectionTitle}>What's on your mind?</div>
+          <div style={s.categories}>
+            {categories.map(cat => (
+              <div key={cat.name} style={s.category} onClick={() => filterByCategory(cat.name)}>
+                <div style={{ ...s.catCircle, border: activeCategory === cat.name ? '2.5px solid #ff6b00' : '2.5px solid transparent' }}>
+                  <img src={cat.img} alt={cat.name} style={s.catImg} onError={e => { e.target.outerHTML = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:28px;background:#f5f5f5;">${cat.emoji}</div>`; }} />
                 </div>
-              )}
-            </div>
-          )}
-
-          <div style={s.whiteSection}>
-
-            <div style={s.section}>
-              <div style={s.sectionTitle}>What's on your mind?</div>
-              <div style={s.categories}>
-                {categories.map(cat => (
-                  <div key={cat.name} style={s.category} onClick={() => filterByCategory(cat.name)}>
-                    <div style={{ ...s.catCircle, border: activeCategory === cat.name ? '2.5px solid #ff6b00' : '2.5px solid transparent' }}>
-                      <img src={cat.img} alt={cat.name} style={s.catImg}
-                        onError={e => { e.target.outerHTML = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:28px;background:#f5f5f5;">${cat.emoji}</div>`; }} />
-                    </div>
-                    <div style={{ ...s.catName, color: activeCategory === cat.name ? '#ff6b00' : '#444', fontWeight: activeCategory === cat.name ? '700' : '500' }}>{cat.name}</div>
-                  </div>
-                ))}
+                <div style={{ ...s.catName, color: activeCategory === cat.name ? '#ff6b00' : '#444', fontWeight: activeCategory === cat.name ? '700' : '500' }}>{cat.name}</div>
               </div>
-            </div>
+            ))}
+          </div>
+        </div>
 
-            {/* MIDDLE banner — shows between categories and More on ZEPPO */}
-            {foodMiddleBanners.length > 0 && (
-              <div style={{ padding: '10px 16px' }}>
-                {renderBannerCarousel(foodMiddleBanners, activeMiddleBanner)}
-                {foodMiddleBanners.length > 1 && (
-                  <div style={s.bannerDots}>
-                    {foodMiddleBanners.map((_, i) => (
-                      <div key={i} style={{ ...s.dot, background: i === activeMiddleBanner ? '#ff6b00' : '#ddd', width: i === activeMiddleBanner ? '18px' : '6px' }} onClick={() => setActiveMiddleBanner(i)} />
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+        {foodMiddleBanners.length > 0 && (
+          <div style={{ padding: '10px 16px' }}>
+            {renderBannerCarousel(foodMiddleBanners, activeMiddleBanner)}
+            {foodMiddleBanners.length > 1 && <div style={s.bannerDots}>{foodMiddleBanners.map((_, i) => <div key={i} style={{ ...s.dot, background: i === activeMiddleBanner ? '#ff6b00' : '#ddd', width: i === activeMiddleBanner ? '18px' : '6px' }} onClick={() => setActiveMiddleBanner(i)} />)}</div>}
+          </div>
+        )}
 
-            <div style={s.section}>
-              <div style={s.sectionTitle}>More on ZEPPO</div>
-              <div style={s.moreGrid}>
-                {moreOnZeppo.map(m => (
-                  <div key={m.title} style={{ ...s.moreTile, background: m.bg }} onClick={m.action}>
-                    <div style={s.moreEmoji}>{m.emoji}</div>
-                    <div style={s.moreTitle}>{m.title}</div>
-                    <div style={s.moreSub}>{m.sub}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
+        <div style={s.section}>
+          <div style={s.sectionTitle}>More on ZEPPO</div>
+          <div style={s.moreGrid}>
+            {moreOnZeppo.map(m => (
+              <div key={m.title} style={{ ...s.moreTile, background: m.bg }} onClick={m.action}><div style={s.moreEmoji}>{m.emoji}</div><div style={s.moreTitle}>{m.title}</div><div style={s.moreSub}>{m.sub}</div></div>
+            ))}
+          </div>
+        </div>
 
-            {recentOrders.length > 0 && (
-              <div style={s.section}>
-                <div style={s.sectionRow}>
-                  <div style={s.sectionTitle}>📦 Recent Orders</div>
-                  <div style={s.seeAll} onClick={() => navigate('/track')}>See all →</div>
+        {recentOrders.length > 0 && (
+          <div style={s.section}>
+            <div style={s.sectionRow}><div style={s.sectionTitle}>📦 Recent Orders</div><div style={s.seeAll} onClick={() => navigate('/track')}>See all →</div></div>
+            <div style={s.hScroll}>
+              {recentOrders.map(order => (
+                <div key={order.id} style={s.orderCard} onClick={() => navigate('/track')}>
+                  <div style={s.orderRestName}>{order.restaurant_name}</div>
+                  <div style={s.orderItemsText}>{(() => { try { return JSON.parse(order.items).slice(0, 2).map(i => i.name).join(', '); } catch { return ''; } })()}</div>
+                  <div style={s.orderFooter}><span style={{ ...s.orderBadge, background: statusColors[order.status] || '#888' }}>{order.status}</span><span style={s.orderAmt}>₹{order.total}</span></div>
                 </div>
-                <div style={s.hScroll}>
-                  {recentOrders.map(order => (
-                    <div key={order.id} style={s.orderCard} onClick={() => navigate('/track')}>
-                      <div style={s.orderRestName}>{order.restaurant_name}</div>
-                      <div style={s.orderItemsText}>
-                        {(() => { try { return JSON.parse(order.items).slice(0, 2).map(i => i.name).join(', '); } catch { return ''; } })()}
-                      </div>
-                      <div style={s.orderFooter}>
-                        <span style={{ ...s.orderBadge, background: statusColors[order.status] || '#888' }}>{order.status}</span>
-                        <span style={s.orderAmt}>₹{order.total}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {filteredItems.length > 0 && (
-              <div style={s.section}>
-                <div style={s.sectionRow}>
-                  <div style={s.sectionTitle}>
-                    {activeCategory === 'All' ? '🔥 Trending dishes near you' : `🍽️ ${activeCategory}`}
-                  </div>
-                  <div style={s.seeAll}>{filteredItems.length} items</div>
-                </div>
-                <div style={s.hScroll}>
-                  {filteredItems.slice(0, 15).map((item, i) => (
-                    <div key={i} style={s.foodCard} onClick={() => navigate(`/order/${item.restaurant_id}`)}>
-                      <div style={s.foodImgBox}>
-                        {item.image ? (
-                          <img src={item.image} alt={item.name} style={s.foodImg}
-                            onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} />
-                        ) : null}
-                        <div style={{ ...s.foodEmojiBox, display: item.image ? 'none' : 'flex' }}>
-                          {item.restaurant_emoji || '🍽️'}
-                        </div>
-                        <div style={s.addBtn}>+</div>
-                      </div>
-                      <div style={s.foodInfo}>
-                        <div style={s.vegDotBadge(isVeg(item))} />
-                        <div style={s.foodName}>{item.name}</div>
-                        <div style={s.foodRestName}>{item.restaurant_name}</div>
-                        <div style={s.foodPriceRow}>
-                          {item.original_price ? (
-                            <>
-                              <span style={s.foodPriceOld}>₹{item.original_price}</span>
-                              <span style={s.foodPrice}>₹{item.price}</span>
-                            </>
-                          ) : (
-                            <span style={s.foodPrice}>₹{item.price}</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div style={s.priceFilters}>
-              {['₹99 & under', '₹100 - ₹149', 'Rated 4.0+'].map(f => (
-                <div key={f} style={s.priceChip}>{f}</div>
               ))}
             </div>
-
-            <div style={s.section}>
-              <div style={s.sectionRow}>
-                <div style={s.sectionTitle}>🏪 Top {displayedRestaurants.length} restaurants to explore</div>
-              </div>
-              <div style={s.sectionSub}>Featured Restaurants</div>
-              {displayedRestaurants.length === 0 ? (
-                <div style={s.noRest}>
-                  <div style={{ fontSize: '50px', marginBottom: '10px' }}>😔</div>
-                  <p style={{ color: '#888' }}>No stores yet!</p>
-                </div>
-              ) : (
-                displayedRestaurants.map(r => (
-                  <div key={r.id} style={{ ...s.restCard, opacity: r.is_open === 0 ? 0.6 : 1 }}
-                    onClick={() => navigate(`/order/${r.id}`)}>
-                    <div style={s.restCardInner}>
-                      <div style={s.restThumb}>
-                        {r.image ? (
-                          <img src={r.image} alt={r.name} style={s.restThumbImg}
-                            onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} />
-                        ) : null}
-                        <div style={{ ...s.restThumbEmoji, display: r.image ? 'none' : 'flex' }}>{r.emoji || '🍽️'}</div>
-                        {r.is_open === 0 && <div style={s.closedBadge}>CLOSED</div>}
-                        <div style={s.offerBadge}>ITEMS AT ₹99</div>
-                      </div>
-                      <div style={s.restInfoSide}>
-                        <div style={s.restName}>{r.name}</div>
-                        <div style={s.restMetaRow}>
-                          <span style={s.ratingBadge}>⭐ {r.rating}</span>
-                          <span style={s.metaDot}>•</span>
-                          <span style={s.timeText}>30-40 min</span>
-                        </div>
-                        <div style={s.restCatText}>{r.category}</div>
-                        {r.description && <div style={s.restDesc}>{r.description}</div>}
-                        <div style={s.restAddr}>📍 {r.address}</div>
-                        <div style={s.freeDelivery}>🎉 Free delivery</div>
-                      </div>
-                      <div style={s.heartBtn}>🤍</div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            <div style={s.partnerCard}>
-              <div>
-                <div style={s.partnerTitle}>🛵 Become a Delivery Partner!</div>
-                <div style={s.partnerSub}>Work near home • Earn daily</div>
-              </div>
-              <button style={s.partnerBtn} onClick={() => navigate('/delivery-signup')}>Apply</button>
-            </div>
-
           </div>
-        </>
-      )}
+        )}
+
+        {filteredItems.length > 0 && (
+          <div style={s.section}>
+            <div style={s.sectionRow}><div style={s.sectionTitle}>{activeCategory === 'All' ? '🔥 Trending dishes near you' : `🍽️ ${activeCategory}`}</div><div style={s.seeAll}>{filteredItems.length} items</div></div>
+            <div style={s.hScroll}>
+              {filteredItems.slice(0, 15).map((item, i) => (
+                <div key={i} style={s.foodCard} onClick={() => navigate(`/order/${item.restaurant_id}`)}>
+                  <div style={s.foodImgBox}>
+                    {item.image ? <img src={item.image} alt={item.name} style={s.foodImg} onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} /> : null}
+                    <div style={{ ...s.foodEmojiBox, display: item.image ? 'none' : 'flex' }}>{item.restaurant_emoji || '🍽️'}</div>
+                    <div style={s.addBtn}>+</div>
+                  </div>
+                  <div style={s.foodInfo}>
+                    <div style={s.vegDotBadge(isVeg(item))} />
+                    <div style={s.foodName}>{item.name}</div>
+                    <div style={s.foodRestName}>{item.restaurant_name}</div>
+                    <div style={s.foodPriceRow}>{item.original_price ? (<><span style={s.foodPriceOld}>₹{item.original_price}</span><span style={s.foodPrice}>₹{item.price}</span></>) : <span style={s.foodPrice}>₹{item.price}</span>}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div style={s.priceFilters}>{['₹99 & under', '₹100 - ₹149', 'Rated 4.0+'].map(f => <div key={f} style={s.priceChip}>{f}</div>)}</div>
+
+        <div style={s.section}>
+          <div style={s.sectionRow}><div style={s.sectionTitle}>🏪 Top {displayedRestaurants.length} restaurants to explore</div></div>
+          <div style={s.sectionSub}>Featured Restaurants</div>
+          {displayedRestaurants.length === 0 ? (
+            <div style={s.noRest}><div style={{ fontSize: '50px', marginBottom: '10px' }}>😔</div><p style={{ color: '#888' }}>No stores yet!</p></div>
+          ) : (
+            displayedRestaurants.map(r => (
+              <div key={r.id} style={{ ...s.restCard, opacity: r.is_open === 0 ? 0.6 : 1 }} onClick={() => navigate(`/order/${r.id}`)}>
+                <div style={s.restCardInner}>
+                  <div style={s.restThumb}>
+                    {r.image ? <img src={r.image} alt={r.name} style={s.restThumbImg} onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} /> : null}
+                    <div style={{ ...s.restThumbEmoji, display: r.image ? 'none' : 'flex' }}>{r.emoji || '🍽️'}</div>
+                    {r.is_open === 0 && <div style={s.closedBadge}>CLOSED</div>}
+                    <div style={s.offerBadge}>ITEMS AT ₹99</div>
+                  </div>
+                  <div style={s.restInfoSide}>
+                    <div style={s.restName}>{r.name}</div>
+                    <div style={s.restMetaRow}><span style={s.ratingBadge}>⭐ {r.rating}</span><span style={s.metaDot}>•</span><span style={s.timeText}>30-40 min</span></div>
+                    <div style={s.restCatText}>{r.category}</div>
+                    {r.description && <div style={s.restDesc}>{r.description}</div>}
+                    <div style={s.restAddr}>📍 {r.address}</div>
+                    <div style={s.freeDelivery}>🎉 Free delivery</div>
+                  </div>
+                  <div style={s.heartBtn}>🤍</div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div style={s.partnerCard}>
+          <div><div style={s.partnerTitle}>🛵 Become a Delivery Partner!</div><div style={s.partnerSub}>Work near home • Earn daily</div></div>
+          <button style={s.partnerBtn} onClick={() => navigate('/delivery-signup')}>Apply</button>
+        </div>
+      </div>
 
       <BottomNav navigate={navigate} active="home" cartCount={cartCount} />
     </div>
@@ -597,28 +631,19 @@ export default function Home() {
 function BottomNav({ navigate, active, cartCount, onHome }) {
   return (
     <div style={s.bottomNav}>
-      <div style={{ ...s.navItem, color: active === 'home' ? '#ff6b00' : '#888' }} onClick={() => onHome ? onHome() : navigate('/')}>
-        <span style={s.navIcon}>🏠</span><span>Home</span>
-      </div>
-      <div style={{ ...s.navItem, color: active === 'stores' ? '#ff6b00' : '#888' }} onClick={() => navigate('/stores')}>
-        <span style={s.navIcon}>🏪</span><span>Stores</span>
-      </div>
-      <div style={{ ...s.navItem, color: active === 'cart' ? '#ff6b00' : '#888', position: 'relative' }} onClick={() => navigate('/cart')}>
-        <span style={s.navIcon}>🛒</span><span>Cart</span>
-        {cartCount > 0 && <span style={s.navCartBadge}>{cartCount}</span>}
-      </div>
-      <div style={{ ...s.navItem, color: active === 'orders' ? '#ff6b00' : '#888' }} onClick={() => navigate('/track')}>
-        <span style={s.navIcon}>📦</span><span>Orders</span>
-      </div>
-      <div style={{ ...s.navItem, color: active === 'profile' ? '#ff6b00' : '#888' }} onClick={() => navigate('/profile')}>
-        <span style={s.navIcon}>👤</span><span>Profile</span>
-      </div>
+      <div style={{ ...s.navItem, color: active === 'home' ? '#ff6b00' : '#888' }} onClick={() => onHome ? onHome() : navigate('/')}><span style={s.navIcon}>🏠</span><span>Home</span></div>
+      <div style={{ ...s.navItem, color: active === 'stores' ? '#ff6b00' : '#888' }} onClick={() => navigate('/stores')}><span style={s.navIcon}>🏪</span><span>Stores</span></div>
+      <div style={{ ...s.navItem, color: active === 'cart' ? '#ff6b00' : '#888', position: 'relative' }} onClick={() => navigate('/cart')}><span style={s.navIcon}>🛒</span><span>Cart</span>{cartCount > 0 && <span style={s.navCartBadge}>{cartCount}</span>}</div>
+      <div style={{ ...s.navItem, color: active === 'orders' ? '#ff6b00' : '#888' }} onClick={() => navigate('/track')}><span style={s.navIcon}>📦</span><span>Orders</span></div>
+      <div style={{ ...s.navItem, color: active === 'profile' ? '#ff6b00' : '#888' }} onClick={() => navigate('/profile')}><span style={s.navIcon}>👤</span><span>Profile</span></div>
     </div>
   );
 }
 
 const s = {
   container: { maxWidth: '480px', margin: '0 auto', minHeight: '100vh', background: '#1a0a0f', paddingBottom: '70px' },
+  topBrandBanner: { width: '100%' },
+  topBrandImg: { width: '100%', display: 'block', objectFit: 'cover', maxHeight: '140px' },
   header: { padding: '50px 16px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
   headerLeft: { cursor: 'pointer', flex: 1 },
   locationRow: { display: 'flex', alignItems: 'center', gap: '6px' },
@@ -630,41 +655,48 @@ const s = {
   menuBtn: { display: 'flex', flexDirection: 'column', gap: '5px', cursor: 'pointer', padding: '8px', background: 'rgba(255,255,255,0.1)', borderRadius: '50%', width: '40px', height: '40px', justifyContent: 'center', alignItems: 'center' },
   menuLine: { width: '18px', height: '2px', background: 'white', borderRadius: '2px' },
   tabs: { display: 'flex', margin: '0 16px 12px', background: 'rgba(255,255,255,0.1)', borderRadius: '30px', padding: '4px' },
-  tab: { flex: 1, padding: '10px', textAlign: 'center', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', borderRadius: '25px' },
+  tab: { flex: 1, padding: '10px', textAlign: 'center', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', borderRadius: '25px' },
   tabActive: { background: 'rgba(255,255,255,0.15)' },
-  tabEmoji: { fontSize: '20px' },
-  tabLabel: { fontSize: '12px', fontWeight: '600' },
+  tabLabel: { fontSize: '11px', fontWeight: '600' },
   searchWrap: { margin: '0 16px 15px', display: 'flex', gap: '10px', alignItems: 'center' },
-  searchBox: { flex: 1, display: 'flex', alignItems: 'center', gap: '10px', background: 'white', borderRadius: '12px', padding: '12px 15px' },
-  searchIcon: { fontSize: '15px', color: '#aaa', flexShrink: 0 },
-  searchInput: { flex: 1, border: 'none', background: 'none', outline: 'none', fontSize: '14px', color: '#222' },
-  clearSearchBtn: { fontSize: '13px', color: '#aaa', cursor: 'pointer' },
+  searchBox: { flex: 1, display: 'flex', alignItems: 'center', gap: '10px', background: 'white', borderRadius: '12px', padding: '12px 15px', cursor: 'pointer' },
+  searchInputFake: { flex: 1, fontSize: '14px', color: '#999' },
   vegToggle: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', background: 'white', borderRadius: '10px', padding: '8px 10px', cursor: 'pointer' },
   vegLabel: { fontSize: '10px', fontWeight: '700', color: '#333' },
   vegSwitch: { width: '32px', height: '18px', borderRadius: '9px', position: 'relative', transition: '0.3s' },
   vegDot: { position: 'absolute', width: '14px', height: '14px', background: 'white', borderRadius: '50%', top: '2px', transition: '0.3s' },
   vegDotBadge: (veg) => ({ width: '13px', height: '13px', border: `1.5px solid ${veg ? '#27ae60' : '#e74c3c'}`, borderRadius: '3px', position: 'relative', marginBottom: '4px', display: 'inline-block' }),
 
-  searchResults: { background: '#f7f7f7', minHeight: '100vh', padding: '15px 16px' },
-  searchResultsHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' },
-  searchResultsTitle: { fontSize: '14px', fontWeight: '700', color: '#222' },
-  closeSearch: { fontSize: '13px', color: '#ff6b00', fontWeight: '600', cursor: 'pointer' },
-  noResult: { textAlign: 'center', padding: '30px 0' },
-  searchGrid: { display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' },
-  searchFoodCard: { background: 'white', borderRadius: '12px', display: 'flex', gap: '12px', overflow: 'hidden', boxShadow: '0 2px 6px rgba(0,0,0,0.06)', cursor: 'pointer' },
-  searchFoodImg: { width: '80px', height: '80px', background: 'linear-gradient(135deg, #ff6b00, #e05a00)', flexShrink: 0, overflow: 'hidden' },
-  searchFoodInfo: { padding: '12px 12px 12px 0', flex: 1 },
-  searchFoodName: { fontSize: '15px', fontWeight: '700', color: '#222', marginBottom: '3px' },
-  searchFoodRest: { fontSize: '12px', color: '#888', marginBottom: '5px' },
-  searchFoodPrice: { fontSize: '14px', fontWeight: '700', color: '#ff6b00' },
-  searchStoresTitle: { fontSize: '16px', fontWeight: '700', color: '#222', marginBottom: '12px', marginTop: '5px' },
-  searchStoreCard: { background: 'white', borderRadius: '12px', display: 'flex', gap: '12px', padding: '12px', marginBottom: '10px', boxShadow: '0 2px 6px rgba(0,0,0,0.06)', cursor: 'pointer', alignItems: 'center' },
-  searchStoreThumb: { width: '60px', height: '60px', borderRadius: '10px', background: 'linear-gradient(135deg, #ff6b00, #e05a00)', flexShrink: 0, overflow: 'hidden' },
-  searchStoreName: { fontSize: '15px', fontWeight: '700', color: '#222', marginBottom: '4px' },
-  searchStoreMeta: { fontSize: '12px', color: '#888', marginBottom: '3px' },
+  vegModalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 800 },
+  vegModalBox: { background: 'white', width: '100%', maxWidth: '480px', borderRadius: '20px 20px 0 0', padding: '24px' },
+  vegModalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '18px' },
+  vegModalTitle: { fontSize: '22px', fontWeight: '800', color: '#222', lineHeight: '1.25' },
+  vegModalDivider: { height: '1px', background: '#eee', marginBottom: '16px' },
+  vegModalOption: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 0', borderBottom: '1px solid #f5f5f5', cursor: 'pointer' },
+  vegModalOptionText: { fontSize: '16px', color: '#222' },
+  radioOuterGreen: { width: '22px', height: '22px', borderRadius: '50%', border: '2px solid #ccc', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  radioInnerGreen: { width: '12px', height: '12px', borderRadius: '50%', background: '#27ae60' },
+  vegModalBtn: { width: '100%', background: '#27ae60', color: 'white', border: 'none', padding: '16px', borderRadius: '12px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', marginTop: '18px' },
+
+  searchPage: { maxWidth: '480px', margin: '0 auto', minHeight: '100vh', background: 'white' },
+  searchTopBar: { display: 'flex', alignItems: 'center', gap: '10px', padding: '50px 16px 15px', borderBottom: '1px solid #f0f0f0', position: 'sticky', top: 0, background: 'white', zIndex: 10 },
+  searchBackBtn: { background: '#f5f5f5', border: 'none', width: '36px', height: '36px', borderRadius: '50%', fontSize: '18px', cursor: 'pointer', flexShrink: 0 },
+  searchInputWrap: { flex: 1, display: 'flex', alignItems: 'center', gap: '10px', background: '#f5f5f5', borderRadius: '12px', padding: '12px 15px' },
+  searchTopInput: { flex: 1, border: 'none', background: 'none', outline: 'none', fontSize: '15px', color: '#222' },
+  searchBody: { padding: '18px 16px' },
+  searchSectionLabel: { fontSize: '14px', fontWeight: '700', color: '#333', marginBottom: '15px' },
+  searchCatGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' },
+  searchCatCard: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', cursor: 'pointer' },
+  searchCatImg: { width: '60px', height: '60px', borderRadius: '50%', objectFit: 'cover' },
+  searchCatName: { fontSize: '11px', color: '#444', textAlign: 'center' },
+  searchResultsGrid: { display: 'flex', flexDirection: 'column', gap: '10px' },
+  searchResultCard: { display: 'flex', background: 'white', border: '1px solid #f0f0f0', borderRadius: '12px', overflow: 'hidden', cursor: 'pointer', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' },
+  searchResultImg: { width: '80px', height: '80px', background: 'linear-gradient(135deg,#ff6b00,#e05a00)', flexShrink: 0, overflow: 'hidden' },
+  searchResultName: { fontSize: '14px', fontWeight: '700', color: '#222' },
+  searchResultRest: { fontSize: '12px', color: '#888', margin: '3px 0' },
+  searchResultPrice: { fontSize: '13px', fontWeight: '700', color: '#ff6b00' },
 
   bigBannerWrap: { margin: '0 16px 5px' },
-  bigBannerWrap2: {},
   bigBanner: { borderRadius: '18px', overflow: 'hidden', marginBottom: '10px', minHeight: '160px', position: 'relative', background: '#1a1a2e' },
   bannerSlide: { position: 'relative', minHeight: '160px', animation: 'fadeBanner 0.4s ease' },
   bannerMedia: { width: '100%', height: '160px', objectFit: 'cover', display: 'block' },
@@ -683,7 +715,6 @@ const s = {
   sectionTitle: { fontSize: '16px', fontWeight: '700', color: '#222' },
   sectionSub: { fontSize: '13px', color: '#888', marginBottom: '15px' },
   seeAll: { fontSize: '13px', color: '#ff6b00', fontWeight: '600', cursor: 'pointer' },
-  storeCount: { fontSize: '13px', color: '#888' },
   categories: { display: 'flex', gap: '16px', overflowX: 'auto', paddingBottom: '10px', scrollbarWidth: 'none' },
   category: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '7px', cursor: 'pointer', minWidth: '68px' },
   catCircle: { width: '68px', height: '68px', borderRadius: '50%', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', transition: '0.2s' },
@@ -751,8 +782,21 @@ const s = {
   dineoutBadge: { position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.7)', color: 'white', fontSize: '9px', fontWeight: '700', padding: '3px', textAlign: 'center' },
   bookNowText: { fontSize: '12px', color: '#ff6b00', fontWeight: '700', marginTop: '6px' },
 
+  stayCard: { background: 'white', borderRadius: '14px', padding: '12px', marginBottom: '12px', display: 'flex', gap: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', cursor: 'pointer' },
+  stayImgBox: { width: '100px', height: '100px', borderRadius: '10px', overflow: 'hidden', flexShrink: 0, position: 'relative', background: 'linear-gradient(135deg,#1a1a6e,#0d0d4a)' },
+  stayImg: { width: '100%', height: '100%', objectFit: 'cover' },
+  stayImgFallback: { width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px' },
+  stayTypeBadge: { position: 'absolute', top: '6px', left: '6px', background: 'rgba(0,0,0,0.65)', color: 'white', fontSize: '9px', fontWeight: '700', padding: '3px 8px', borderRadius: '10px' },
+  amenityChip: { fontSize: '10px', background: '#f0f0f0', color: '#666', padding: '2px 8px', borderRadius: '10px' },
+  stayPriceRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' },
+  stayPrice: { fontSize: '15px', fontWeight: '800', color: '#222' },
+
   bookModalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' },
   bookModalBox: { background: 'white', borderRadius: '20px', padding: '28px 24px', width: '100%', maxWidth: '360px', textAlign: 'center' },
   callBtn: { display: 'block', background: '#27ae60', color: 'white', padding: '13px', borderRadius: '12px', fontSize: '14px', fontWeight: '700', textDecoration: 'none', marginBottom: '10px' },
   closeBookBtn: { width: '100%', padding: '12px', background: '#f3f4f6', color: '#6b7280', border: 'none', borderRadius: '12px', fontSize: '14px', cursor: 'pointer' },
+
+  stayBookBox: { background: 'white', borderRadius: '20px', padding: '24px', width: '100%', maxWidth: '380px' },
+  smallLabel: { display: 'block', fontSize: '12px', color: '#888', marginBottom: '5px', fontWeight: '600' },
+  stayBookBtn: { width: '100%', background: '#ff6b00', color: 'white', border: 'none', padding: '14px', borderRadius: '12px', fontSize: '14px', fontWeight: '700', cursor: 'pointer', margin: '10px 0' },
 };
