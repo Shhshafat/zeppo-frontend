@@ -37,6 +37,7 @@ export default function Home() {
   const [activeBanner, setActiveBanner] = useState(0);
   const [activeMiddleBanner, setActiveMiddleBanner] = useState(0);
   const [activeDineoutBanner, setActiveDineoutBanner] = useState(0);
+  const [activeStaysBanner, setActiveStaysBanner] = useState(0);
   const [activeCategory, setActiveCategory] = useState('All');
   const [loading, setLoading] = useState(true);
   const [vegMode, setVegMode] = useState(false);
@@ -45,6 +46,8 @@ export default function Home() {
   const [vegModalOpen, setVegModalOpen] = useState(false);
   const [vegModalChoice, setVegModalChoice] = useState('all');
   const [settings, setSettings] = useState({});
+  const [topBannerMuted, setTopBannerMuted] = useState(true);
+  const [soundInitDone, setSoundInitDone] = useState(false);
 
   // Stays state
   const [stays, setStays] = useState([]);
@@ -74,6 +77,10 @@ export default function Home() {
       setRecentOrders(orderRes.data.slice(0, 3));
       setBanners(bannerRes.data);
       setSettings(settingsRes.data);
+      if (!soundInitDone) {
+        setTopBannerMuted(settingsRes.data.default_sound !== 'sound');
+        setSoundInitDone(true);
+      }
       const allItems = [];
       for (const r of rests) {
         try {
@@ -109,6 +116,8 @@ export default function Home() {
   const foodMiddleBanners = banners.filter(b => (b.category || 'food') === 'food' && b.position === 'middle');
   const dineoutTopBanners = banners.filter(b => b.category === 'dineout' && (b.position || 'top') === 'top');
   const dineoutMiddleBanners = banners.filter(b => b.category === 'dineout' && b.position === 'middle');
+  const staysTopBanners = banners.filter(b => b.category === 'stays' && (b.position || 'top') === 'top');
+  const staysMiddleBanners = banners.filter(b => b.category === 'stays' && b.position === 'middle');
 
   useEffect(() => {
     if (foodTopBanners.length <= 1) return;
@@ -127,6 +136,12 @@ export default function Home() {
     const t = setInterval(() => setActiveDineoutBanner(p => (p + 1) % dineoutTopBanners.length), 4500);
     return () => clearInterval(t);
   }, [dineoutTopBanners.length]);
+
+  useEffect(() => {
+    if (staysTopBanners.length <= 1) return;
+    const t = setInterval(() => setActiveStaysBanner(p => (p + 1) % staysTopBanners.length), 4500);
+    return () => clearInterval(t);
+  }, [staysTopBanners.length]);
 
   useEffect(() => {
     let items = menuItems;
@@ -291,6 +306,7 @@ export default function Home() {
   if (activeTab === 'stays') {
     return (
       <div style={s.container}>
+        <style>{`@keyframes fadeBanner { from { opacity: 0; } to { opacity: 1; } }`}</style>
         {stayBookModal && (
           <div style={s.bookModalOverlay} onClick={() => setStayBookModal(null)}>
             <div style={s.stayBookBox} onClick={e => e.stopPropagation()}>
@@ -327,19 +343,38 @@ export default function Home() {
           </div>
         )}
 
-        <div style={s.header}>
-          <div style={s.headerLeft} onClick={() => navigate('/location')}>
-            <div style={s.locationRow}><span style={s.locationName}>{location}</span><span style={s.locationArrow}>›</span></div>
-            <div style={s.locationSub}>{locationSub}</div>
+        <div style={s.topBrandWrap}>
+          {settings.top_banner_image && (
+            settings.top_banner_is_video === '1' ? (
+              <video src={settings.top_banner_image} autoPlay loop playsInline muted={topBannerMuted} style={s.topBrandBg} />
+            ) : (
+              <img src={settings.top_banner_image} alt="ZEPPO" style={s.topBrandBg} />
+            )
+          )}
+          {settings.top_banner_image && <div style={s.topBrandOverlay} />}
+          {settings.top_banner_image && settings.top_banner_is_video === '1' && (
+            <button style={s.soundToggleBtn} onClick={() => setTopBannerMuted(m => !m)}>{topBannerMuted ? '🔇' : '🔊'}</button>
+          )}
+          <div style={s.header}>
+            <div style={s.headerLeft} onClick={() => navigate('/location')}>
+              <div style={s.locationRow}><span style={s.locationName}>{location}</span><span style={s.locationArrow}>›</span></div>
+              <div style={s.locationSub}>{locationSub}</div>
+            </div>
           </div>
-        </div>
-        <div style={s.tabs}>
-          <div style={s.tab} onClick={() => setActiveTab('food')}><FoodIcon color="#888" /><span style={{ ...s.tabLabel, color: '#888' }}>Food</span></div>
-          <div style={s.tab} onClick={() => setActiveTab('dineout')}><DineIcon color="#888" /><span style={{ ...s.tabLabel, color: '#888' }}>Dineout</span></div>
-          <div style={{ ...s.tab, ...s.tabActive }}><StayIcon color="white" /><span style={{ ...s.tabLabel, color: 'white' }}>Stays</span></div>
+          <div style={s.tabs}>
+            <div style={s.tab} onClick={() => setActiveTab('food')}><FoodIcon color="#888" /><span style={{ ...s.tabLabel, color: '#888' }}>Food</span></div>
+            <div style={s.tab} onClick={() => setActiveTab('dineout')}><DineIcon color="#888" /><span style={{ ...s.tabLabel, color: '#888' }}>Dineout</span></div>
+            <div style={{ ...s.tab, ...s.tabActive }}><StayIcon color="white" /><span style={{ ...s.tabLabel, color: 'white' }}>Stays</span></div>
+          </div>
         </div>
 
         <div style={s.whiteSection}>
+          {staysTopBanners.length > 0 && (
+            <div style={{ padding: '16px 16px 5px' }}>
+              {renderBannerCarousel(staysTopBanners, activeStaysBanner)}
+              {staysTopBanners.length > 1 && <div style={s.bannerDots}>{staysTopBanners.map((_, i) => <div key={i} style={{ ...s.dot, background: i === activeStaysBanner ? '#ff6b00' : '#ddd', width: i === activeStaysBanner ? '18px' : '6px' }} onClick={() => setActiveStaysBanner(i)} />)}</div>}
+            </div>
+          )}
           <div style={s.section}>
             <div style={s.sectionTitle}>🏨 Hotels & Rooms in {location}</div>
             <div style={s.sectionSub}>Coming to town? Book a place to stay</div>
@@ -348,31 +383,34 @@ export default function Home() {
             ) : stays.length === 0 ? (
               <div style={s.noRest}><div style={{ fontSize: '50px', marginBottom: '10px' }}>🏨</div><p style={{ color: '#888' }}>No stays listed yet — check back soon!</p></div>
             ) : (
-              stays.map(st => {
+              stays.map((st, idx) => {
                 let imgs = [];
                 try { imgs = st.images ? JSON.parse(st.images) : []; } catch {}
                 let amenities = st.amenities ? st.amenities.split(',').map(a => a.trim()).filter(Boolean) : [];
                 return (
-                  <div key={st.id} style={s.stayCard} onClick={() => openStayBook(st)}>
-                    <div style={s.stayImgBox}>
-                      {imgs[0] ? <img src={imgs[0]} alt={st.name} style={s.stayImg} /> : <div style={s.stayImgFallback}>🏨</div>}
-                      <div style={s.stayTypeBadge}>{st.type}</div>
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={s.restName}>{st.name}</div>
-                      <div style={s.restMetaRow}><span style={s.ratingBadge}>⭐ {st.rating}</span><span style={s.metaDot}>•</span><span style={s.timeText}>{st.type}</span></div>
-                      <div style={s.restAddr}>📍 {st.address}</div>
-                      {amenities.length > 0 && (
-                        <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginTop: '5px' }}>
-                          {amenities.slice(0, 3).map((a, i) => <span key={i} style={s.amenityChip}>{a}</span>)}
+                  <React.Fragment key={st.id}>
+                    <div style={s.stayCard} onClick={() => openStayBook(st)}>
+                      <div style={s.stayImgBox}>
+                        {imgs[0] ? <img src={imgs[0]} alt={st.name} style={s.stayImg} /> : <div style={s.stayImgFallback}>🏨</div>}
+                        <div style={s.stayTypeBadge}>{st.type}</div>
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={s.restName}>{st.name}</div>
+                        <div style={s.restMetaRow}><span style={s.ratingBadge}>⭐ {st.rating}</span><span style={s.metaDot}>•</span><span style={s.timeText}>{st.type}</span></div>
+                        <div style={s.restAddr}>📍 {st.address}</div>
+                        {amenities.length > 0 && (
+                          <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', marginTop: '5px' }}>
+                            {amenities.slice(0, 3).map((a, i) => <span key={i} style={s.amenityChip}>{a}</span>)}
+                          </div>
+                        )}
+                        <div style={s.stayPriceRow}>
+                          <span style={s.stayPrice}>₹{st.price_per_night}<span style={{ fontSize: '11px', fontWeight: '500', color: '#888' }}>/night</span></span>
+                          <span style={s.bookNowText}>Book Now →</span>
                         </div>
-                      )}
-                      <div style={s.stayPriceRow}>
-                        <span style={s.stayPrice}>₹{st.price_per_night}<span style={{ fontSize: '11px', fontWeight: '500', color: '#888' }}>/night</span></span>
-                        <span style={s.bookNowText}>Book Now →</span>
                       </div>
                     </div>
-                  </div>
+                    {idx === 1 && staysMiddleBanners.length > 0 && <div style={{ margin: '15px 0' }}>{renderBannerCarousel(staysMiddleBanners, 0)}</div>}
+                  </React.Fragment>
                 );
               })
             )}
@@ -399,16 +437,29 @@ export default function Home() {
             </div>
           </div>
         )}
-        <div style={s.header}>
-          <div style={s.headerLeft} onClick={() => navigate('/location')}>
-            <div style={s.locationRow}><span style={s.locationName}>{location}</span><span style={s.locationArrow}>›</span></div>
-            <div style={s.locationSub}>{locationSub}</div>
+        <div style={s.topBrandWrap}>
+          {settings.top_banner_image && (
+            settings.top_banner_is_video === '1' ? (
+              <video src={settings.top_banner_image} autoPlay loop playsInline muted={topBannerMuted} style={s.topBrandBg} />
+            ) : (
+              <img src={settings.top_banner_image} alt="ZEPPO" style={s.topBrandBg} />
+            )
+          )}
+          {settings.top_banner_image && <div style={s.topBrandOverlay} />}
+          {settings.top_banner_image && settings.top_banner_is_video === '1' && (
+            <button style={s.soundToggleBtn} onClick={() => setTopBannerMuted(m => !m)}>{topBannerMuted ? '🔇' : '🔊'}</button>
+          )}
+          <div style={s.header}>
+            <div style={s.headerLeft} onClick={() => navigate('/location')}>
+              <div style={s.locationRow}><span style={s.locationName}>{location}</span><span style={s.locationArrow}>›</span></div>
+              <div style={s.locationSub}>{locationSub}</div>
+            </div>
           </div>
-        </div>
-        <div style={s.tabs}>
-          <div style={{ ...s.tab, ...s.tabActive }} onClick={() => setActiveTab('food')}><FoodIcon color="white" /><span style={{ ...s.tabLabel, color: 'white' }}>Food</span></div>
-          <div style={s.tab} onClick={() => setActiveTab('dineout')}><DineIcon color="#888" /><span style={{ ...s.tabLabel, color: '#888' }}>Dineout</span></div>
-          <div style={s.tab} onClick={() => setActiveTab('stays')}><StayIcon color="#888" /><span style={{ ...s.tabLabel, color: '#888' }}>Stays</span></div>
+          <div style={s.tabs}>
+            <div style={s.tab} onClick={() => setActiveTab('food')}><FoodIcon color="#888" /><span style={{ ...s.tabLabel, color: '#888' }}>Food</span></div>
+            <div style={{ ...s.tab, ...s.tabActive }}><DineIcon color="white" /><span style={{ ...s.tabLabel, color: 'white' }}>Dineout</span></div>
+            <div style={s.tab} onClick={() => setActiveTab('stays')}><StayIcon color="#888" /><span style={{ ...s.tabLabel, color: '#888' }}>Stays</span></div>
+          </div>
         </div>
         <div style={s.whiteSection}>
           {dineoutTopBanners.length > 0 && (
@@ -474,38 +525,46 @@ export default function Home() {
         </div>
       )}
 
-      {/* Top branding banner from App Settings */}
-      {settings.top_banner_image && (
-        <div style={s.topBrandBanner}>
-          <img src={settings.top_banner_image} alt="ZEPPO" style={s.topBrandImg} />
-        </div>
-      )}
+      {/* Top branding banner — now full background behind header/tabs/search */}
+      <div style={s.topBrandWrap}>
+        {settings.top_banner_image && (
+          settings.top_banner_is_video === '1' ? (
+            <video src={settings.top_banner_image} autoPlay loop playsInline muted={topBannerMuted} style={s.topBrandBg} />
+          ) : (
+            <img src={settings.top_banner_image} alt="ZEPPO" style={s.topBrandBg} />
+          )
+        )}
+        {settings.top_banner_image && <div style={s.topBrandOverlay} />}
+        {settings.top_banner_image && settings.top_banner_is_video === '1' && (
+          <button style={s.soundToggleBtn} onClick={() => setTopBannerMuted(m => !m)}>{topBannerMuted ? '🔇' : '🔊'}</button>
+        )}
 
-      <div style={s.header}>
-        <div style={s.headerLeft} onClick={() => navigate('/location')}>
-          <div style={s.locationRow}><span style={s.locationName}>{location.length > 18 ? location.slice(0, 18) + '...' : location}</span><span style={s.locationArrow}>›</span></div>
-          <div style={s.locationSub}>{locationSub.length > 30 ? locationSub.slice(0, 30) + '...' : locationSub}</div>
+        <div style={s.header}>
+          <div style={s.headerLeft} onClick={() => navigate('/location')}>
+            <div style={s.locationRow}><span style={s.locationName}>{location.length > 18 ? location.slice(0, 18) + '...' : location}</span><span style={s.locationArrow}>›</span></div>
+            <div style={s.locationSub}>{locationSub.length > 30 ? locationSub.slice(0, 30) + '...' : locationSub}</div>
+          </div>
+          <div style={s.headerRight}>
+            {role === 'admin' && <div style={s.adminBtn} onClick={() => navigate('/admin')}>Admin</div>}
+            <div style={s.menuBtn} onClick={() => navigate('/profile')}><div style={s.menuLine} /><div style={s.menuLine} /><div style={s.menuLine} /></div>
+          </div>
         </div>
-        <div style={s.headerRight}>
-          {role === 'admin' && <div style={s.adminBtn} onClick={() => navigate('/admin')}>Admin</div>}
-          <div style={s.menuBtn} onClick={() => navigate('/profile')}><div style={s.menuLine} /><div style={s.menuLine} /><div style={s.menuLine} /></div>
-        </div>
-      </div>
 
-      <div style={s.tabs}>
-        <div style={{ ...s.tab, ...s.tabActive }}><FoodIcon color="white" /><span style={{ ...s.tabLabel, color: 'white' }}>Food</span></div>
-        <div style={s.tab} onClick={() => setActiveTab('dineout')}><DineIcon color="#888" /><span style={{ ...s.tabLabel, color: '#888' }}>Dineout</span></div>
-        <div style={s.tab} onClick={() => setActiveTab('stays')}><StayIcon color="#888" /><span style={{ ...s.tabLabel, color: '#888' }}>Stays</span></div>
-      </div>
-
-      <div style={s.searchWrap}>
-        <div style={s.searchBox} onClick={() => setShowSearch(true)}>
-          <SearchIconSvg color="#aaa" />
-          <div style={s.searchInputFake}>Search for food...</div>
+        <div style={s.tabs}>
+          <div style={{ ...s.tab, ...s.tabActive }}><FoodIcon color="white" /><span style={{ ...s.tabLabel, color: 'white' }}>Food</span></div>
+          <div style={s.tab} onClick={() => setActiveTab('dineout')}><DineIcon color="#888" /><span style={{ ...s.tabLabel, color: '#888' }}>Dineout</span></div>
+          <div style={s.tab} onClick={() => setActiveTab('stays')}><StayIcon color="#888" /><span style={{ ...s.tabLabel, color: '#888' }}>Stays</span></div>
         </div>
-        <div style={s.vegToggle} onClick={openVegModal}>
-          <div style={s.vegLabel}>VEG</div>
-          <div style={{ ...s.vegSwitch, background: vegMode ? '#27ae60' : '#555' }}><div style={{ ...s.vegDot, left: vegMode ? '14px' : '2px' }} /></div>
+
+        <div style={s.searchWrap}>
+          <div style={s.searchBox} onClick={() => setShowSearch(true)}>
+            <SearchIconSvg color="#aaa" />
+            <div style={s.searchInputFake}>Search for food...</div>
+          </div>
+          <div style={s.vegToggle} onClick={openVegModal}>
+            <div style={s.vegLabel}>VEG</div>
+            <div style={{ ...s.vegSwitch, background: vegMode ? '#27ae60' : '#555' }}><div style={{ ...s.vegDot, left: vegMode ? '14px' : '2px' }} /></div>
+          </div>
         </div>
       </div>
 
@@ -642,23 +701,25 @@ function BottomNav({ navigate, active, cartCount, onHome }) {
 
 const s = {
   container: { maxWidth: '480px', margin: '0 auto', minHeight: '100vh', background: '#1a0a0f', paddingBottom: '70px' },
-  topBrandBanner: { width: '100%' },
-  topBrandImg: { width: '100%', display: 'block', objectFit: 'cover', maxHeight: '140px' },
-  header: { padding: '50px 16px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+  topBrandWrap: { position: 'relative', overflow: 'hidden', paddingBottom: '15px' },
+  topBrandBg: { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 },
+  topBrandOverlay: { position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(26,10,15,0.65) 0%, rgba(26,10,15,0.8) 60%, #1a0a0f 100%)', zIndex: 1 },
+  soundToggleBtn: { position: 'absolute', top: '12px', right: '12px', background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)', color: 'white', border: '1px solid rgba(255,255,255,0.25)', width: '28px', height: '28px', borderRadius: '50%', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3 },
+  header: { padding: '50px 16px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', zIndex: 2 },
   headerLeft: { cursor: 'pointer', flex: 1 },
   locationRow: { display: 'flex', alignItems: 'center', gap: '6px' },
-  locationName: { fontSize: '18px', fontWeight: '700', color: 'white' },
+  locationName: { fontSize: '18px', fontWeight: '700', color: 'white', textShadow: '0 1px 4px rgba(0,0,0,0.6)' },
   locationArrow: { fontSize: '18px', color: 'white' },
   locationSub: { fontSize: '12px', color: 'rgba(255,255,255,0.6)', marginTop: '2px' },
   headerRight: { display: 'flex', alignItems: 'center', gap: '10px' },
   adminBtn: { background: '#ff6b00', color: 'white', padding: '6px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '600', cursor: 'pointer' },
   menuBtn: { display: 'flex', flexDirection: 'column', gap: '5px', cursor: 'pointer', padding: '8px', background: 'rgba(255,255,255,0.1)', borderRadius: '50%', width: '40px', height: '40px', justifyContent: 'center', alignItems: 'center' },
   menuLine: { width: '18px', height: '2px', background: 'white', borderRadius: '2px' },
-  tabs: { display: 'flex', margin: '0 16px 12px', background: 'rgba(255,255,255,0.1)', borderRadius: '30px', padding: '4px' },
+  tabs: { display: 'flex', margin: '0 16px 12px', background: 'rgba(255,255,255,0.1)', borderRadius: '30px', padding: '4px', position: 'relative', zIndex: 2 },
   tab: { flex: 1, padding: '10px', textAlign: 'center', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', borderRadius: '25px' },
   tabActive: { background: 'rgba(255,255,255,0.15)' },
-  tabLabel: { fontSize: '11px', fontWeight: '600' },
-  searchWrap: { margin: '0 16px 15px', display: 'flex', gap: '10px', alignItems: 'center' },
+  tabLabel: { fontSize: '11px', fontWeight: '600', textShadow: '0 1px 3px rgba(0,0,0,0.5)' },
+  searchWrap: { margin: '0 16px 0', display: 'flex', gap: '10px', alignItems: 'center', position: 'relative', zIndex: 2 },
   searchBox: { flex: 1, display: 'flex', alignItems: 'center', gap: '10px', background: 'white', borderRadius: '12px', padding: '12px 15px', cursor: 'pointer' },
   searchInputFake: { flex: 1, fontSize: '14px', color: '#999' },
   vegToggle: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', background: 'white', borderRadius: '10px', padding: '8px 10px', cursor: 'pointer' },

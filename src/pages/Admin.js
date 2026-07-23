@@ -37,7 +37,7 @@ export default function Admin() {
 
   // App Settings state
   const [settings, setSettings] = useState({});
-  const [settingsForm, setSettingsForm] = useState({ top_banner_image: '', tagline: 'Ghar tak, jhatpat!', support_email: 'support@zeppo.in', support_phone: '', whatsapp_number: '', maintenance_mode: 'off' });
+  const [settingsForm, setSettingsForm] = useState({ top_banner_image: '', tagline: 'Ghar tak, jhatpat!', support_email: 'support@zeppo.in', support_phone: '', whatsapp_number: '', maintenance_mode: 'off', default_sound: 'muted' });
 
   // Stays state
   const [stays, setStays] = useState([]);
@@ -231,7 +231,7 @@ export default function Admin() {
   };
 
   const saveAllSettings = async () => {
-    for (const key of ['tagline', 'support_email', 'support_phone', 'whatsapp_number', 'maintenance_mode']) {
+    for (const key of ['tagline', 'support_email', 'support_phone', 'whatsapp_number', 'maintenance_mode', 'default_sound']) {
       await API.post('/api/settings', { key, value: settingsForm[key] || '' });
     }
     alert('✅ Settings saved!');
@@ -239,9 +239,10 @@ export default function Admin() {
   };
 
   const uploadTopBanner = async () => {
-    if (!topBannerRef.current?.files[0]) { alert('Photo select karo!'); return; }
+    if (!topBannerRef.current?.files[0]) { alert('Photo ya video select karo!'); return; }
     const r = await uploadImage(topBannerRef.current.files[0], 'banner');
     await saveSetting('top_banner_image', r.url);
+    await saveSetting('top_banner_is_video', r.is_video ? '1' : '0');
     if (topBannerRef.current) topBannerRef.current.value = '';
     alert('✅ Top banner updated!');
   };
@@ -299,7 +300,7 @@ export default function Admin() {
     { key: 'menu', icon: '🍽️', label: 'Menu' },
     { key: 'delivery', icon: '🛵', label: 'Delivery Boys' },
     { key: 'settlements', icon: '💳', label: 'Settlements' },
-    { key: 'stays', icon: '🏨', label: 'Stays' },
+    { key: 'stays', icon: '🏨', label: '🏨 Stays (Hotels/Rooms)' },
     { key: 'tickets', icon: '🎫', label: 'Support Tickets' },
     { key: 'applications', icon: '📝', label: 'Applications' },
     { key: 'banners', icon: '🎨', label: 'Banners' },
@@ -931,6 +932,7 @@ export default function Admin() {
                     <select style={s.input} value={bannerForm.category} onChange={e => setBannerForm({ ...bannerForm, category: e.target.value })}>
                       <option value="food">🍔 Food Tab</option>
                       <option value="dineout">🍽️ Dineout Tab</option>
+                      <option value="stays">🏨 Stays Tab</option>
                     </select>
                   </div>
                   <div>
@@ -962,7 +964,7 @@ export default function Admin() {
                       <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)', padding: '16px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
                         <div style={{ fontSize: '16px', fontWeight: '700', color: 'white' }}>{b.title}</div>
                         <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.85)' }}>{b.subtitle}</div>
-                        <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', marginTop: '4px' }}>Link: {b.link || '(none)'} {b.is_video ? '· 🎥 Video' : ''} · {b.category === 'dineout' ? '🍽️ Dineout' : '🍔 Food'} tab · {b.position === 'middle' ? '↕️ Middle' : '⬆️ Top'}</div>
+                        <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', marginTop: '4px' }}>Link: {b.link || '(none)'} {b.is_video ? '· 🎥 Video' : ''} · {b.category === 'dineout' ? '🍽️ Dineout' : b.category === 'stays' ? '🏨 Stays' : '🍔 Food'} tab · {b.position === 'middle' ? '↕️ Middle' : '⬆️ Top'}</div>
                       </div>
                       <button style={{ ...s.btnRed, position: 'absolute', top: '10px', right: '10px' }} onClick={() => { API.post('/api/banners/delete', { id: b.id }); loadAll(); }}>Delete</button>
                     </div>
@@ -1033,11 +1035,16 @@ export default function Admin() {
                 <p style={{ fontSize: '12px', color: '#888', marginBottom: '15px' }}>This shows at the very top of the Home page, above the Food/Dineout tabs. Leave empty to hide.</p>
                 {settings.top_banner_image && (
                   <div style={{ marginBottom: '12px' }}>
-                    <img src={settings.top_banner_image} alt="" style={{ width: '100%', maxWidth: '300px', borderRadius: '12px', display: 'block', marginBottom: '10px' }} />
-                    <button style={s.btnRed} onClick={removeTopBanner}>Remove Image</button>
+                    {settings.top_banner_is_video === '1' ? (
+                      <video src={settings.top_banner_image} controls muted style={{ width: '100%', maxWidth: '300px', borderRadius: '12px', display: 'block', marginBottom: '10px' }} />
+                    ) : (
+                      <img src={settings.top_banner_image} alt="" style={{ width: '100%', maxWidth: '300px', borderRadius: '12px', display: 'block', marginBottom: '10px' }} />
+                    )}
+                    <button style={s.btnRed} onClick={removeTopBanner}>Remove</button>
                   </div>
                 )}
-                <input type="file" ref={topBannerRef} accept="image/*" style={s.fileInput} />
+                <label style={s.uploadLabel}>📷🎥 Upload Photo or Video (video can have sound):</label>
+                <input type="file" ref={topBannerRef} accept="image/*,video/*" style={s.fileInput} />
                 <button style={s.btnOrange} onClick={uploadTopBanner}>⬆️ Upload / Replace</button>
               </div>
 
@@ -1051,6 +1058,13 @@ export default function Admin() {
                 <input style={s.input} value={settingsForm.support_phone} onChange={e => setSettingsForm({ ...settingsForm, support_phone: e.target.value })} placeholder="+91-7006XXXXXX" />
                 <label style={s.uploadLabel}>WhatsApp Number (for quick support link)</label>
                 <input style={s.input} value={settingsForm.whatsapp_number} onChange={e => setSettingsForm({ ...settingsForm, whatsapp_number: e.target.value })} placeholder="917006XXXXXX" />
+
+                <label style={s.uploadLabel}>🔊 Video Banners — Default Sound</label>
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+                  <div onClick={() => setSettingsForm({ ...settingsForm, default_sound: 'muted' })} style={{ flex: 1, padding: '12px', borderRadius: '8px', textAlign: 'center', cursor: 'pointer', fontSize: '13px', fontWeight: '700', border: settingsForm.default_sound !== 'sound' ? '2px solid #ff6b00' : '1px solid #e0e0e0', background: settingsForm.default_sound !== 'sound' ? '#fff3e0' : 'white', color: settingsForm.default_sound !== 'sound' ? '#e65100' : '#888' }}>🔇 Muted by default</div>
+                  <div onClick={() => setSettingsForm({ ...settingsForm, default_sound: 'sound' })} style={{ flex: 1, padding: '12px', borderRadius: '8px', textAlign: 'center', cursor: 'pointer', fontSize: '13px', fontWeight: '700', border: settingsForm.default_sound === 'sound' ? '2px solid #ff6b00' : '1px solid #e0e0e0', background: settingsForm.default_sound === 'sound' ? '#fff3e0' : 'white', color: settingsForm.default_sound === 'sound' ? '#e65100' : '#888' }}>🔊 Sound on by default</div>
+                </div>
+                <p style={{ fontSize: '11px', color: '#aaa', marginTop: '-8px', marginBottom: '15px' }}>Customers can always tap the speaker icon to override this.</p>
 
                 <label style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '15px 0', fontSize: '14px', cursor: 'pointer' }}>
                   <input type="checkbox" checked={settingsForm.maintenance_mode === 'on'} onChange={e => setSettingsForm({ ...settingsForm, maintenance_mode: e.target.checked ? 'on' : 'off' })} />
