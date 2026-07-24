@@ -16,7 +16,9 @@ export default function Profile() {
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackSent, setFeedbackSent] = useState(false);
   const [address, setAddress] = useState('');
-  const [addresses, setAddresses] = useState([{ id: 1, type: 'Home', address: 'Kupwara Town, J&K' }]);
+  const [addressType, setAddressType] = useState('Home');
+  const [addresses, setAddresses] = useState([]);
+  const [addressesLoading, setAddressesLoading] = useState(true);
   const [editName, setEditName] = useState(name);
   const [editPhone, setEditPhone] = useState('');
   const [editEmail, setEditEmail] = useState('');
@@ -29,12 +31,59 @@ export default function Profile() {
   const [referrals, setReferrals] = useState([]);
   const [walletLoading, setWalletLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [myRefunds, setMyRefunds] = useState([]);
+  const [refundsLoading, setRefundsLoading] = useState(true);
 
   const logout = () => { localStorage.clear(); navigate('/login'); };
 
   useEffect(() => {
     if (page === 'zeppomoney') loadWallet();
+    if (page === 'address') loadAddresses();
+    if (page === 'refunds') loadRefunds();
   }, [page]);
+
+  const loadAddresses = async () => {
+    try {
+      setAddressesLoading(true);
+      const token = localStorage.getItem('token');
+      const res = await API.get('/api/addresses/me', { headers: { Authorization: `Bearer ${token}` } });
+      setAddresses(res.data);
+    } catch (e) { console.error(e); }
+    finally { setAddressesLoading(false); }
+  };
+
+  const addAddress = async () => {
+    if (!address.trim()) return;
+    try {
+      const token = localStorage.getItem('token');
+      await API.post('/api/addresses/add', { type: addressType, address }, { headers: { Authorization: `Bearer ${token}` } });
+      setAddress('');
+      loadAddresses();
+    } catch (e) { alert('Error saving address!'); }
+  };
+
+  const deleteAddress = async (id) => {
+    if (!window.confirm('Remove this address?')) return;
+    const token = localStorage.getItem('token');
+    await API.post('/api/addresses/delete', { id }, { headers: { Authorization: `Bearer ${token}` } });
+    loadAddresses();
+  };
+
+  const setDefaultAddress = async (id) => {
+    const token = localStorage.getItem('token');
+    await API.post('/api/addresses/set-default', { id }, { headers: { Authorization: `Bearer ${token}` } });
+    loadAddresses();
+  };
+
+  const loadRefunds = async () => {
+    try {
+      setRefundsLoading(true);
+      const token = localStorage.getItem('token');
+      const res = await API.get('/api/my-refunds', { headers: { Authorization: `Bearer ${token}` } });
+      setMyRefunds(res.data);
+    } catch (e) { console.error(e); }
+    finally { setRefundsLoading(false); }
+  };
 
   const loadWallet = async () => {
     try {
@@ -152,18 +201,42 @@ export default function Profile() {
 
   if (page === 'address') return (
     <SubPage title="📍 Address Book">
-      {addresses.map(a => (
-        <div key={a.id} style={s.infoCard}>
-          <span style={{ fontSize: '22px' }}>{a.type === 'Home' ? '🏠' : '🏢'}</span>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: '700', color: '#222', marginBottom: '3px' }}>{a.type}</div>
-            <div style={{ color: '#888', fontSize: '13px' }}>{a.address}</div>
-          </div>
-          <span style={{ color: '#ff6b00', fontSize: '13px', cursor: 'pointer' }}>Edit</span>
+      {addressesLoading ? (
+        <div style={{ textAlign: 'center', padding: '30px', color: '#aaa' }}>Loading...</div>
+      ) : addresses.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '20px 0 25px' }}>
+          <div style={{ fontSize: '45px', marginBottom: '10px' }}>📍</div>
+          <p style={{ color: '#888', fontSize: '14px' }}>No saved addresses yet</p>
         </div>
-      ))}
-      <input style={s.fieldInput} placeholder="Enter new address..." value={address} onChange={e => setAddress(e.target.value)} />
-      <button style={s.orangeBtn} onClick={() => { if (address.trim()) { setAddresses([...addresses, { id: Date.now(), type: 'Other', address }]); setAddress(''); } }}>+ Add Address</button>
+      ) : (
+        addresses.map(a => (
+          <div key={a.id} style={s.infoCard}>
+            <span style={{ fontSize: '22px' }}>{a.type === 'Home' ? '🏠' : a.type === 'Work' ? '🏢' : '📍'}</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px' }}>
+                <span style={{ fontWeight: '700', color: '#222' }}>{a.type}</span>
+                {a.is_default === 1 && <span style={{ fontSize: '10px', background: '#fff3e0', color: '#ff6b00', padding: '2px 8px', borderRadius: '10px', fontWeight: '700' }}>DEFAULT</span>}
+              </div>
+              <div style={{ color: '#888', fontSize: '13px' }}>{a.address}</div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'flex-end' }}>
+              {a.is_default !== 1 && <span style={{ color: '#27ae60', fontSize: '12px', cursor: 'pointer', fontWeight: '600' }} onClick={() => setDefaultAddress(a.id)}>Set default</span>}
+              <span style={{ color: '#e74c3c', fontSize: '12px', cursor: 'pointer', fontWeight: '600' }} onClick={() => deleteAddress(a.id)}>Remove</span>
+            </div>
+          </div>
+        ))
+      )}
+
+      <div style={{ background: 'white', borderRadius: '12px', padding: '16px', marginTop: '15px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+        <div style={{ fontWeight: '700', color: '#222', marginBottom: '12px' }}>+ Add New Address</div>
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+          {['Home', 'Work', 'Other'].map(t => (
+            <div key={t} onClick={() => setAddressType(t)} style={{ flex: 1, padding: '10px', textAlign: 'center', borderRadius: '10px', cursor: 'pointer', fontSize: '13px', fontWeight: '600', border: addressType === t ? '2px solid #ff6b00' : '1.5px solid #eee', background: addressType === t ? '#fff3e0' : '#fafafa', color: addressType === t ? '#e65100' : '#888' }}>{t}</div>
+          ))}
+        </div>
+        <input style={s.fieldInput} placeholder="Enter full address..." value={address} onChange={e => setAddress(e.target.value)} />
+        <button style={s.orangeBtn} onClick={addAddress}>+ Save Address</button>
+      </div>
     </SubPage>
   );
 
@@ -203,10 +276,31 @@ export default function Profile() {
 
   if (page === 'refunds') return (
     <SubPage title="💰 My Refunds">
-      <div style={{ textAlign: 'center', padding: '40px 0' }}>
-        <div style={{ fontSize: '60px', marginBottom: '15px' }}>💰</div>
-        <div style={{ fontWeight: '700', color: '#222', marginBottom: '8px' }}>No Refunds Yet</div>
-        <div style={{ color: '#888', fontSize: '14px' }}>Your refunds will appear here</div>
+      {refundsLoading ? (
+        <div style={{ textAlign: 'center', padding: '30px', color: '#aaa' }}>Loading...</div>
+      ) : myRefunds.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '40px 0' }}>
+          <div style={{ fontSize: '60px', marginBottom: '15px' }}>💰</div>
+          <div style={{ fontWeight: '700', color: '#222', marginBottom: '8px' }}>No Refunds Yet</div>
+          <div style={{ color: '#888', fontSize: '14px' }}>Your refunds will appear here</div>
+        </div>
+      ) : (
+        myRefunds.map(o => (
+          <div key={o.id} style={s.infoCard}>
+            <span style={{ fontSize: '22px' }}>{o.refund_status === 'refunded' ? '✅' : '⏳'}</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: '700', color: '#222', marginBottom: '3px' }}>{o.restaurant_name} — Order #{o.id}</div>
+              <div style={{ color: '#888', fontSize: '13px' }}>{new Date(o.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+              <div style={{ fontSize: '13px', fontWeight: '700', marginTop: '4px', color: o.refund_status === 'refunded' ? '#27ae60' : '#e67e22' }}>
+                {o.refund_status === 'refunded' ? `✅ ₹${o.total} Refunded` : `⏳ ₹${o.total} Pending — being processed`}
+              </div>
+            </div>
+          </div>
+        ))
+      )}
+      <div style={{ background: '#fff3e0', borderRadius: '12px', padding: '15px', marginTop: '15px' }}>
+        <div style={{ fontWeight: '700', color: '#ff6b00', marginBottom: '5px', fontSize: '13px' }}>💡 Refund Info</div>
+        <div style={{ color: '#888', fontSize: '12.5px', lineHeight: '1.5' }}>UPI refunds for cancelled orders are processed manually by our team within 3-5 business days. Cash on Delivery orders don't need a refund since no payment was made in advance.</div>
       </div>
     </SubPage>
   );
@@ -388,6 +482,64 @@ export default function Profile() {
     </SubPage>
   );
 
+  if (page === 'terms') return (
+    <SubPage title="📜 Terms & Conditions">
+      <div style={{ background: 'white', borderRadius: '12px', padding: '18px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', fontSize: '13.5px', color: '#555', lineHeight: '1.7' }}>
+        <p style={{ color: '#aaa', fontSize: '12px', marginBottom: '15px' }}>Last updated: July 2026</p>
+
+        <h4 style={{ color: '#222', marginBottom: '6px' }}>1. Acceptance of Terms</h4>
+        <p style={{ marginBottom: '14px' }}>By using the ZEPPO app, you agree to these terms. If you don't agree, please don't use our services.</p>
+
+        <h4 style={{ color: '#222', marginBottom: '6px' }}>2. Orders & Payments</h4>
+        <p style={{ marginBottom: '14px' }}>Orders are placed with partner restaurants through ZEPPO. Payment can be made via Cash on Delivery or UPI. Prices shown include applicable charges unless stated otherwise.</p>
+
+        <h4 style={{ color: '#222', marginBottom: '6px' }}>3. Cancellations</h4>
+        <p style={{ marginBottom: '14px' }}>Orders can be cancelled within 2 minutes of placing. UPI payments for cancelled orders are refunded manually within 3-5 business days.</p>
+
+        <h4 style={{ color: '#222', marginBottom: '6px' }}>4. Delivery</h4>
+        <p style={{ marginBottom: '14px' }}>Delivery times are estimates and may vary due to weather, traffic, or restaurant preparation time. ZEPPO is not liable for delays beyond our control.</p>
+
+        <h4 style={{ color: '#222', marginBottom: '6px' }}>5. User Conduct</h4>
+        <p style={{ marginBottom: '14px' }}>You agree not to misuse the platform, provide false information, or place fraudulent orders. Accounts found doing so may be suspended.</p>
+
+        <h4 style={{ color: '#222', marginBottom: '6px' }}>6. ZEPPO Money & Referrals</h4>
+        <p style={{ marginBottom: '14px' }}>ZEPPO Money earned through referrals or coupons can be used toward orders. It has no cash value and cannot be withdrawn.</p>
+
+        <h4 style={{ color: '#222', marginBottom: '6px' }}>7. Changes to Terms</h4>
+        <p style={{ marginBottom: '0' }}>We may update these terms from time to time. Continued use of the app after changes means you accept the updated terms.</p>
+      </div>
+    </SubPage>
+  );
+
+  if (page === 'privacy') return (
+    <SubPage title="🔒 Privacy Policy">
+      <div style={{ background: 'white', borderRadius: '12px', padding: '18px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', fontSize: '13.5px', color: '#555', lineHeight: '1.7' }}>
+        <p style={{ color: '#aaa', fontSize: '12px', marginBottom: '15px' }}>Last updated: July 2026</p>
+
+        <h4 style={{ color: '#222', marginBottom: '6px' }}>1. Information We Collect</h4>
+        <p style={{ marginBottom: '14px' }}>We collect your name, phone number, email, and delivery address to process orders. We do not collect payment card details — UPI transactions happen outside the app.</p>
+
+        <h4 style={{ color: '#222', marginBottom: '6px' }}>2. How We Use Your Information</h4>
+        <p style={{ marginBottom: '14px' }}>Your information is used to process orders, contact you about deliveries, send order updates, and improve our services. We do not sell your data to third parties.</p>
+
+        <h4 style={{ color: '#222', marginBottom: '6px' }}>3. Sharing With Delivery Partners</h4>
+        <p style={{ marginBottom: '14px' }}>Your name, phone number, and delivery address are shared with the assigned delivery partner solely to complete your order.</p>
+
+        <h4 style={{ color: '#222', marginBottom: '6px' }}>4. Data Security</h4>
+        <p style={{ marginBottom: '14px' }}>Passwords are encrypted and never stored in plain text. We take reasonable measures to protect your data, though no system is 100% secure.</p>
+
+        <h4 style={{ color: '#222', marginBottom: '6px' }}>5. Location Data</h4>
+        <p style={{ marginBottom: '14px' }}>We use your selected delivery location to show relevant restaurants and stays near you. We do not track your location in the background.</p>
+
+        <h4 style={{ color: '#222', marginBottom: '6px' }}>6. Your Rights</h4>
+        <p style={{ marginBottom: '14px' }}>You can edit your profile information anytime, or contact support to request deletion of your account and data.</p>
+
+        <h4 style={{ color: '#222', marginBottom: '6px' }}>7. Contact Us</h4>
+        <p style={{ marginBottom: '0' }}>For privacy-related questions, email us at support@zeppo.in.</p>
+      </div>
+    </SubPage>
+  );
+
   if (page === 'about') return (
     <SubPage title="ℹ️ About ZEPPO">
       <div style={{ textAlign: 'center', marginBottom: '25px' }}>
@@ -496,6 +648,8 @@ export default function Profile() {
         <MenuItem icon="ℹ️" label="About" onClick={() => setPage('about')} />
         <MenuItem icon="💬" label="Send feedback" onClick={() => setPage('feedback')} />
         <MenuItem icon="🆘" label="Help & Support" onClick={() => setPage('help')} />
+        <MenuItem icon="📜" label="Terms & Conditions" onClick={() => setPage('terms')} />
+        <MenuItem icon="🔒" label="Privacy Policy" onClick={() => setPage('privacy')} />
         <MenuItem icon="⚙️" label="Settings" onClick={() => setPage('settings')} />
         {role === 'admin' && <MenuItem icon="👑" label="Admin Panel" onClick={() => navigate('/admin')} />}
         <MenuItem icon="🚪" label="Log out" red onClick={logout} />
