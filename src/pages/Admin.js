@@ -48,7 +48,7 @@ export default function Admin() {
 
   // Dineout Tiles state
   const [dineoutTiles, setDineoutTiles] = useState([]);
-  const [tileForm, setTileForm] = useState({ label: '', icon: 'star', filter_type: 'none', filter_value: '', sort_order: 0 });
+  const [tileForm, setTileForm] = useState({ label: '', icon: 'star', image: '', filter_type: 'none', filter_value: '', sort_order: 0 });
   const [editTile, setEditTile] = useState(null);
 
   const restImgRef = useRef();
@@ -57,6 +57,8 @@ export default function Admin() {
   const topBannerRef = useRef();
   const stayImgRef = useRef();
   const editStayImgRef = useRef();
+  const tileImgRef = useRef();
+  const editTileImgRef = useRef();
 
   useEffect(() => { loadAll(); }, []);
   useEffect(() => { if (page === 'settlements') loadSettlements(); }, [page]);
@@ -314,13 +316,18 @@ export default function Admin() {
   // ===== Dineout Tiles handlers =====
   const addTile = async () => {
     if (!tileForm.label) { alert('Label zaroori hai!'); return; }
-    await API.post('/api/dineout-tiles/add', tileForm);
-    setTileForm({ label: '', icon: 'star', filter_type: 'none', filter_value: '', sort_order: 0 });
+    let image = tileForm.image;
+    if (tileImgRef.current?.files[0]) { const r = await uploadImage(tileImgRef.current.files[0], 'tile'); image = r.url; }
+    await API.post('/api/dineout-tiles/add', { ...tileForm, image });
+    setTileForm({ label: '', icon: 'star', image: '', filter_type: 'none', filter_value: '', sort_order: 0 });
+    if (tileImgRef.current) tileImgRef.current.value = '';
     alert('✅ Tile added!');
     loadTiles();
   };
   const updateTile = async () => {
-    await API.post('/api/dineout-tiles/update', editTile);
+    let image = editTile.image;
+    if (editTileImgRef.current?.files[0]) { const r = await uploadImage(editTileImgRef.current.files[0], 'tile'); image = r.url; }
+    await API.post('/api/dineout-tiles/update', { ...editTile, image });
     setEditTile(null);
     alert('✅ Tile updated!');
     loadTiles();
@@ -991,6 +998,9 @@ export default function Admin() {
                     )}
                     <label style={s.uploadLabel}>Sort Order (lower shows first)</label>
                     <input style={s.input} type="number" value={editTile.sort_order} onChange={e => setEditTile({ ...editTile, sort_order: e.target.value })} />
+                    <label style={s.uploadLabel}>📷 Tile Photo (optional)</label>
+                    <input type="file" ref={editTileImgRef} accept="image/*" style={s.fileInput} />
+                    {editTile.image && <img src={editTile.image} alt="" style={s.previewImg} />}
                     <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
                       <button style={s.btnGreen} onClick={updateTile}>Save Changes</button>
                       <button style={s.btnRed} onClick={() => setEditTile(null)}>Cancel</button>
@@ -1028,6 +1038,8 @@ export default function Admin() {
                 {tileForm.filter_type !== 'none' && tileForm.filter_type !== 'discount' && (
                   <input style={s.input} placeholder={tileForm.filter_type === 'rating' ? 'e.g. 4' : 'e.g. cafe, fine dining...'} value={tileForm.filter_value} onChange={e => setTileForm({ ...tileForm, filter_value: e.target.value })} />
                 )}
+                <label style={s.uploadLabel}>📷 Tile Photo (optional — if added, shows behind the icon instead of plain orange)</label>
+                <input type="file" ref={tileImgRef} accept="image/*" style={s.fileInput} />
                 <button style={s.btnOrange} onClick={addTile}>➕ Add Tile</button>
               </div>
 
@@ -1035,10 +1047,11 @@ export default function Admin() {
                 <h3 style={s.tableTitle}>🍽️ Current Dineout Tiles</h3>
                 {dineoutTiles.length === 0 ? <p style={{ color: '#aaa', fontSize: '14px' }}>No tiles yet — add one above!</p> : (
                   <table style={s.table}>
-                    <thead><tr>{['Order', 'Label', 'Icon', 'Filter', 'Status', 'Action'].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                    <thead><tr>{['Photo', 'Order', 'Label', 'Icon', 'Filter', 'Status', 'Action'].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
                     <tbody>
                       {dineoutTiles.map(t => (
                         <tr key={t.id}>
+                          <td style={s.td}>{t.image ? <img src={t.image} alt="" style={s.thumbImg} /> : <span style={{ fontSize: '20px', color: '#ccc' }}>—</span>}</td>
                           <td style={s.td}>{t.sort_order}</td>
                           <td style={s.td}><strong>{t.label.replace('\n', ' ')}</strong></td>
                           <td style={s.td}><code>{t.icon}</code></td>
