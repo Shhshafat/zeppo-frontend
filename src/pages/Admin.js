@@ -7,7 +7,7 @@ export default function Admin() {
   const [page, setPage] = useState('dashboard');
   const [data, setData] = useState({ orders: [], restaurants: [], users: [], applications: [], deliveryBoys: [], notifications: [], banners: [], coupons: [], analytics: {}, shifts: [] });
   const [unread, setUnread] = useState(0);
-  const [restForm, setRestForm] = useState({ name: '', category: '', emoji: '🍽️', address: '', description: '', image: '', commission_percent: 15, phone: '', min_order: 0, delivery_charge: 0, opening_time: '09:00', closing_time: '23:00' });
+  const [restForm, setRestForm] = useState({ name: '', category: '', emoji: '🍽️', address: '', description: '', image: '', commission_percent: 15, discount_percent: 0, free_delivery: 1, phone: '', min_order: 0, delivery_charge: 0, opening_time: '09:00', closing_time: '23:00' });
   const [menuForm, setMenuForm] = useState({ restaurant_id: '', category: '', name: '', price: '', original_price: '', description: '', image: '', is_veg: 1 });
   const [portions, setPortions] = useState([]);
   const [portionInput, setPortionInput] = useState({ name: '', price: '' });
@@ -46,6 +46,11 @@ export default function Admin() {
   const [editStay, setEditStay] = useState(null);
   const [stayFilter, setStayFilter] = useState('pending');
 
+  // Dineout Tiles state
+  const [dineoutTiles, setDineoutTiles] = useState([]);
+  const [tileForm, setTileForm] = useState({ label: '', icon: 'star', filter_type: 'none', filter_value: '', sort_order: 0 });
+  const [editTile, setEditTile] = useState(null);
+
   const restImgRef = useRef();
   const foodImgRef = useRef();
   const bannerFileRef = useRef();
@@ -58,6 +63,12 @@ export default function Admin() {
   useEffect(() => { if (page === 'tickets') loadTickets(); }, [page]);
   useEffect(() => { if (page === 'appsettings') loadSettings(); }, [page]);
   useEffect(() => { if (page === 'stays') loadStays(); }, [page]);
+  useEffect(() => { if (page === 'dineouttiles') loadTiles(); }, [page]);
+
+  const loadTiles = async () => {
+    const res = await API.get('/api/dineout-tiles/all');
+    setDineoutTiles(res.data);
+  };
 
   const loadAll = async () => {
     const [orders, rests, users, apps, dboys, notifs, banners, coupons, analytics, shifts] = await Promise.all([
@@ -113,7 +124,7 @@ export default function Admin() {
     let image = restForm.image;
     if (restImgRef.current?.files[0]) { const r = await uploadImage(restImgRef.current.files[0], 'restaurant'); image = r.url; }
     await API.post('/api/restaurants/add', { ...restForm, image });
-    setRestForm({ name: '', category: '', emoji: '🍽️', address: '', description: '', image: '', commission_percent: 15, phone: '', min_order: 0, delivery_charge: 0, opening_time: '09:00', closing_time: '23:00' });
+    setRestForm({ name: '', category: '', emoji: '🍽️', address: '', description: '', image: '', commission_percent: 15, discount_percent: 0, free_delivery: 1, phone: '', min_order: 0, delivery_charge: 0, opening_time: '09:00', closing_time: '23:00' });
     if (restImgRef.current) restImgRef.current.value = '';
     alert('✅ Restaurant added!');
     loadAll();
@@ -300,6 +311,33 @@ export default function Admin() {
     loadStays();
   };
 
+  // ===== Dineout Tiles handlers =====
+  const addTile = async () => {
+    if (!tileForm.label) { alert('Label zaroori hai!'); return; }
+    await API.post('/api/dineout-tiles/add', tileForm);
+    setTileForm({ label: '', icon: 'star', filter_type: 'none', filter_value: '', sort_order: 0 });
+    alert('✅ Tile added!');
+    loadTiles();
+  };
+  const updateTile = async () => {
+    await API.post('/api/dineout-tiles/update', editTile);
+    setEditTile(null);
+    alert('✅ Tile updated!');
+    loadTiles();
+  };
+  const deleteTile = async (id) => {
+    if (window.confirm('Delete this tile?')) {
+      await API.post('/api/dineout-tiles/delete', { id });
+      loadTiles();
+    }
+  };
+  const toggleTileActive = async (tile) => {
+    await API.post('/api/dineout-tiles/update', { ...tile, is_active: tile.is_active ? 0 : 1 });
+    loadTiles();
+  };
+
+  const ICON_OPTIONS = ['percent', 'award', 'coffee', 'trending-up', 'star', 'gift', 'heart', 'map-pin', 'tag', 'thumbs-up', 'clock', 'truck', 'zap'];
+
   const filteredBookings = stayBookings.filter(b => stayFilter === 'all' ? true : b.status === stayFilter);
 
   const pages = [
@@ -310,6 +348,7 @@ export default function Admin() {
     { key: 'delivery', icon: '🛵', label: 'Delivery Boys' },
     { key: 'settlements', icon: '💳', label: 'Settlements' },
     { key: 'stays', icon: '🏨', label: '🏨 Stays (Hotels/Rooms)' },
+    { key: 'dineouttiles', icon: '🍽️', label: '🍽️ Dineout Features' },
     { key: 'tickets', icon: '🎫', label: 'Support Tickets' },
     { key: 'applications', icon: '📝', label: 'Applications' },
     { key: 'banners', icon: '🎨', label: 'Banners' },
@@ -578,9 +617,13 @@ export default function Admin() {
                     <input style={s.input} placeholder="Phone" value={editRest.phone || ''} onChange={e => setEditRest({ ...editRest, phone: e.target.value })} />
                     <div style={s.formGrid}>
                       <input style={s.input} placeholder="Commission %" type="number" value={editRest.commission_percent ?? 15} onChange={e => setEditRest({ ...editRest, commission_percent: e.target.value })} />
+                      <input style={s.input} placeholder="Discount % (e.g. 20 — shown as offer badge)" type="number" value={editRest.discount_percent ?? 0} onChange={e => setEditRest({ ...editRest, discount_percent: e.target.value })} />
                       <input style={s.input} placeholder="Min Order (₹)" type="number" value={editRest.min_order ?? 0} onChange={e => setEditRest({ ...editRest, min_order: e.target.value })} />
                       <input style={s.input} placeholder="Delivery Charge (₹)" type="number" value={editRest.delivery_charge ?? 0} onChange={e => setEditRest({ ...editRest, delivery_charge: e.target.value })} />
-                      <div />
+                      <select style={s.input} value={editRest.free_delivery ?? 1} onChange={e => setEditRest({ ...editRest, free_delivery: parseInt(e.target.value) })}>
+                        <option value={1}>🎉 Free Delivery: Yes</option>
+                        <option value={0}>Free Delivery: No</option>
+                      </select>
                       <div><label style={s.uploadLabel}>Opening Time</label><input style={s.input} type="time" value={editRest.opening_time || '09:00'} onChange={e => setEditRest({ ...editRest, opening_time: e.target.value })} /></div>
                       <div><label style={s.uploadLabel}>Closing Time</label><input style={s.input} type="time" value={editRest.closing_time || '23:00'} onChange={e => setEditRest({ ...editRest, closing_time: e.target.value })} /></div>
                     </div>
@@ -604,8 +647,16 @@ export default function Admin() {
                   <input style={s.input} placeholder="Address *" value={restForm.address} onChange={e => setRestForm({ ...restForm, address: e.target.value })} />
                   <input style={s.input} placeholder="Phone Number" value={restForm.phone} onChange={e => setRestForm({ ...restForm, phone: e.target.value })} />
                   <input style={s.input} placeholder="Commission % (default 15)" type="number" value={restForm.commission_percent} onChange={e => setRestForm({ ...restForm, commission_percent: e.target.value })} />
+                  <input style={s.input} placeholder="Discount % (e.g. 20 — shown as offer badge)" type="number" value={restForm.discount_percent} onChange={e => setRestForm({ ...restForm, discount_percent: e.target.value })} />
                   <input style={s.input} placeholder="Min Order Value (₹)" type="number" value={restForm.min_order} onChange={e => setRestForm({ ...restForm, min_order: e.target.value })} />
                   <input style={s.input} placeholder="Delivery Charge (₹, 0 = free)" type="number" value={restForm.delivery_charge} onChange={e => setRestForm({ ...restForm, delivery_charge: e.target.value })} />
+                  <div>
+                    <label style={s.uploadLabel}>Free Delivery Badge?</label>
+                    <select style={s.input} value={restForm.free_delivery} onChange={e => setRestForm({ ...restForm, free_delivery: parseInt(e.target.value) })}>
+                      <option value={1}>🎉 Yes, show "Free Delivery"</option>
+                      <option value={0}>No</option>
+                    </select>
+                  </div>
                   <div><label style={s.uploadLabel}>Opening Time</label><input style={s.input} type="time" value={restForm.opening_time} onChange={e => setRestForm({ ...restForm, opening_time: e.target.value })} /></div>
                   <div><label style={s.uploadLabel}>Closing Time</label><input style={s.input} type="time" value={restForm.closing_time} onChange={e => setRestForm({ ...restForm, closing_time: e.target.value })} /></div>
                 </div>
@@ -617,13 +668,14 @@ export default function Admin() {
               <div style={s.tableCard}>
                 <h3 style={s.tableTitle}>🏪 All Restaurants</h3>
                 <table style={s.table}>
-                  <thead><tr>{['Image', 'Name', 'Category', 'Commission', 'Min Order', 'Rating', 'Status', 'Action'].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                  <thead><tr>{['Image', 'Name', 'Category', 'Commission', 'Discount', 'Min Order', 'Rating', 'Status', 'Action'].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
                   <tbody>
                     {data.restaurants.map(r => (
                       <tr key={r.id}>
                         <td style={s.td}>{r.image ? <img src={r.image} alt="" style={s.thumbImg} /> : <span style={{ fontSize: '30px' }}>{r.emoji}</span>}</td>
                         <td style={s.td}><strong>{r.name}</strong><div style={{ fontSize: '12px', color: '#888' }}>{r.phone}</div></td>
                         <td style={s.td}>{r.category}</td><td style={s.td}>{r.commission_percent || 15}%</td>
+                        <td style={s.td}>{r.discount_percent > 0 ? <span style={{ color: '#e74c3c', fontWeight: '700' }}>{r.discount_percent}% OFF</span> : <span style={{ color: '#ccc' }}>—</span>}</td>
                         <td style={s.td}>₹{r.min_order || 0}</td><td style={s.td}>⭐ {r.rating}</td>
                         <td style={s.td}><span style={{ ...s.badge2, background: r.is_open ? '#d1e7dd' : '#f8d7da', color: r.is_open ? '#0a3622' : '#842029' }}>{r.is_open ? 'Open' : 'Closed'}</span></td>
                         <td style={s.td}>
@@ -904,6 +956,98 @@ export default function Admin() {
                                 <button style={{ ...s.btnRed, marginLeft: '5px' }} onClick={() => updateBookingStatus(b.id, 'rejected')}>❌</button>
                               </>
                             )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* DINEOUT FEATURES (Tiles) */}
+          {page === 'dineouttiles' && (
+            <div>
+              {editTile && (
+                <div style={s.modal}>
+                  <div style={s.modalBox}>
+                    <h3 style={s.modalTitle}>Edit Tile</h3>
+                    <label style={s.uploadLabel}>Label (use a line break for 2 lines)</label>
+                    <textarea style={s.textarea} value={editTile.label} onChange={e => setEditTile({ ...editTile, label: e.target.value })} />
+                    <label style={s.uploadLabel}>Icon</label>
+                    <select style={s.input} value={editTile.icon} onChange={e => setEditTile({ ...editTile, icon: e.target.value })}>
+                      {ICON_OPTIONS.map(ic => <option key={ic} value={ic}>{ic}</option>)}
+                    </select>
+                    <label style={s.uploadLabel}>What should tapping this tile filter by?</label>
+                    <select style={s.input} value={editTile.filter_type} onChange={e => setEditTile({ ...editTile, filter_type: e.target.value })}>
+                      <option value="none">Nothing (just decorative)</option>
+                      <option value="category">Restaurant category contains...</option>
+                      <option value="discount">Has a discount (discount % &gt; 0)</option>
+                      <option value="rating">Rating at least...</option>
+                    </select>
+                    {editTile.filter_type !== 'none' && editTile.filter_type !== 'discount' && (
+                      <input style={s.input} placeholder={editTile.filter_type === 'rating' ? 'e.g. 4' : 'e.g. cafe, fine dining...'} value={editTile.filter_value} onChange={e => setEditTile({ ...editTile, filter_value: e.target.value })} />
+                    )}
+                    <label style={s.uploadLabel}>Sort Order (lower shows first)</label>
+                    <input style={s.input} type="number" value={editTile.sort_order} onChange={e => setEditTile({ ...editTile, sort_order: e.target.value })} />
+                    <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                      <button style={s.btnGreen} onClick={updateTile}>Save Changes</button>
+                      <button style={s.btnRed} onClick={() => setEditTile(null)}>Cancel</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div style={s.formCard}>
+                <h3 style={s.tableTitle}>➕ Add Dineout Hero Tile</h3>
+                <p style={{ fontSize: '12px', color: '#888', marginBottom: '15px' }}>
+                  These are the quick-shortcut tiles shown on the Dineout tab (e.g. "Up To 20% OFF", "Fine Dining"). Add, edit, reorder, or remove them anytime — no coding needed.
+                </p>
+                <label style={s.uploadLabel}>Label (use a line break for 2 lines, e.g. "Up To\n20% OFF")</label>
+                <textarea style={s.textarea} placeholder="Up To&#10;20% OFF" value={tileForm.label} onChange={e => setTileForm({ ...tileForm, label: e.target.value })} />
+                <div style={s.formGrid}>
+                  <div>
+                    <label style={s.uploadLabel}>Icon</label>
+                    <select style={s.input} value={tileForm.icon} onChange={e => setTileForm({ ...tileForm, icon: e.target.value })}>
+                      {ICON_OPTIONS.map(ic => <option key={ic} value={ic}>{ic}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={s.uploadLabel}>Sort Order</label>
+                    <input style={s.input} type="number" placeholder="1, 2, 3..." value={tileForm.sort_order} onChange={e => setTileForm({ ...tileForm, sort_order: e.target.value })} />
+                  </div>
+                </div>
+                <label style={s.uploadLabel}>What should tapping this tile filter by?</label>
+                <select style={s.input} value={tileForm.filter_type} onChange={e => setTileForm({ ...tileForm, filter_type: e.target.value })}>
+                  <option value="none">Nothing (just decorative)</option>
+                  <option value="category">Restaurant category contains...</option>
+                  <option value="discount">Has a discount (discount % &gt; 0)</option>
+                  <option value="rating">Rating at least...</option>
+                </select>
+                {tileForm.filter_type !== 'none' && tileForm.filter_type !== 'discount' && (
+                  <input style={s.input} placeholder={tileForm.filter_type === 'rating' ? 'e.g. 4' : 'e.g. cafe, fine dining...'} value={tileForm.filter_value} onChange={e => setTileForm({ ...tileForm, filter_value: e.target.value })} />
+                )}
+                <button style={s.btnOrange} onClick={addTile}>➕ Add Tile</button>
+              </div>
+
+              <div style={s.tableCard}>
+                <h3 style={s.tableTitle}>🍽️ Current Dineout Tiles</h3>
+                {dineoutTiles.length === 0 ? <p style={{ color: '#aaa', fontSize: '14px' }}>No tiles yet — add one above!</p> : (
+                  <table style={s.table}>
+                    <thead><tr>{['Order', 'Label', 'Icon', 'Filter', 'Status', 'Action'].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                    <tbody>
+                      {dineoutTiles.map(t => (
+                        <tr key={t.id}>
+                          <td style={s.td}>{t.sort_order}</td>
+                          <td style={s.td}><strong>{t.label.replace('\n', ' ')}</strong></td>
+                          <td style={s.td}><code>{t.icon}</code></td>
+                          <td style={s.td}>{t.filter_type === 'none' ? '—' : t.filter_type === 'discount' ? 'Has discount' : t.filter_type === 'rating' ? `Rating ≥ ${t.filter_value}` : `Category: ${t.filter_value}`}</td>
+                          <td style={s.td}><span style={{ ...s.badge2, background: t.is_active ? '#d1e7dd' : '#f8d7da', color: t.is_active ? '#0a3622' : '#842029' }}>{t.is_active ? 'Active' : 'Hidden'}</span></td>
+                          <td style={s.td}>
+                            <button style={s.btnConfirm} onClick={() => setEditTile(t)}>Edit</button>
+                            <button style={{ ...s.btnConfirm, background: t.is_active ? '#f8d7da' : '#d1e7dd', color: t.is_active ? '#842029' : '#0a3622', marginLeft: '5px' }} onClick={() => toggleTileActive(t)}>{t.is_active ? 'Hide' : 'Show'}</button>
+                            <button style={{ ...s.btnRed, marginLeft: '5px' }} onClick={() => deleteTile(t.id)}>Delete</button>
                           </td>
                         </tr>
                       ))}
