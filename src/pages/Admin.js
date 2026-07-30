@@ -1393,7 +1393,7 @@ function getBadge(status) {
 
 const s = {
   container: { display: 'flex', minHeight: '100vh', background: '#f4f6f9' },
-  sidebar: { width: '240px', background: '#1a1a2e', minHeight: '100vh', position: 'fixed', left: 0, top: 0, zIndex: 100, overflowY: 'auto' },
+  sidebar: { width: '240px', background: '#1a1a2e', height: '100vh', position: 'fixed', left: 0, top: 0, zIndex: 100, overflowY: 'auto' },
   sidebarLogo: { padding: '20px', borderBottom: '1px solid #2d2d44' },
   logoText: { color: '#ff6b00', fontSize: '22px', fontWeight: '700' },
   logoSub: { color: '#aaa', fontSize: '12px', marginTop: '3px' },
