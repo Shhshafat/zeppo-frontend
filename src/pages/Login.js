@@ -26,6 +26,7 @@ export default function Login() {
         localStorage.setItem('role', res.data.role);
         if (res.data.role === 'admin') navigate('/admin');
         else if (res.data.role === 'delivery') navigate('/delivery');
+        else if (res.data.role === 'restaurant') navigate('/restaurant-dashboard');
         else navigate('/');
       } else {
         setError(res.data.message);

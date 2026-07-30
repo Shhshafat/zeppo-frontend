@@ -7,6 +7,7 @@ import Order from './pages/Order';
 import Track from './pages/Track';
 import Admin from './pages/Admin';
 import DeliveryBoy from './pages/DeliveryBoy';
+import RestaurantDashboard from './pages/RestaurantDashboard';
 import Profile from './pages/Profile';
 import Location from './pages/Location';
 import DeliverySignup from './pages/DeliverySignup';
@@ -29,6 +30,11 @@ const AdminRoute = ({ children }) => {
   const token = localStorage.getItem('token');
   const role = localStorage.getItem('role');
   return token && role === 'admin' ? children : <Navigate to="/" />;
+};
+const RestaurantRoute = ({ children }) => {
+  const token = localStorage.getItem('token');
+  const role = localStorage.getItem('role');
+  return token && role === 'restaurant' ? children : <Navigate to="/login" />;
 };
 
 function OfflineBanner() {
@@ -160,6 +166,7 @@ function App() {
               <Route path="/track" element={<PrivateRoute><Track /></PrivateRoute>} />
               <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
               <Route path="/delivery" element={<PrivateRoute><DeliveryBoy /></PrivateRoute>} />
+              <Route path="/restaurant-dashboard" element={<RestaurantRoute><RestaurantDashboard /></RestaurantRoute>} />
               <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
               <Route path="/location" element={<PrivateRoute><Location /></PrivateRoute>} />
               <Route path="/delivery-signup" element={<DeliverySignup />} />

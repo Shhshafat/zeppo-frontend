@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../api';
 
@@ -11,14 +11,47 @@ export default function DeliveryBoy() {
   const [toggling, setToggling] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showHistory, setShowHistory] = useState(false);
+  const [locationError, setLocationError] = useState('');
   const token = localStorage.getItem('token');
+  const locationIntervalRef = useRef(null);
 
   useEffect(() => {
     if (!token) { navigate('/login'); return; }
     Promise.all([loadOrders(), loadMe(), loadAdvances()]).finally(() => setLoading(false));
     const interval = setInterval(() => { loadOrders(); loadMe(); loadAdvances(); }, 30000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      if (locationIntervalRef.current) clearInterval(locationIntervalRef.current);
+    };
   }, []);
+
+  // Once we know we're online, keep sending a fresh location every 2 minutes so the
+  // auto-assign system always has a recent fix to work with.
+  useEffect(() => {
+    if (locationIntervalRef.current) clearInterval(locationIntervalRef.current);
+    if (me?.is_online === 1) {
+      locationIntervalRef.current = setInterval(() => sendLocationPing(), 120000);
+    }
+    return () => { if (locationIntervalRef.current) clearInterval(locationIntervalRef.current); };
+  }, [me?.is_online]);
+
+  const getCurrentPosition = () => new Promise((resolve, reject) => {
+    if (!navigator.geolocation) { reject(new Error('Geolocation not supported')); return; }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      (err) => reject(err),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  });
+
+  const sendLocationPing = async () => {
+    try {
+      const { lat, lng } = await getCurrentPosition();
+      await API.post('/api/delivery-boys/update-location', { lat, lng }, { headers: { Authorization: `Bearer ${token}` } });
+    } catch (e) {
+      // Silent — a missed background ping isn't worth alarming the delivery partner about
+    }
+  };
 
   const loadOrders = async () => {
     const res = await API.get('/api/delivery-orders', { headers: { Authorization: `Bearer ${token}` } });
@@ -38,7 +71,21 @@ export default function DeliveryBoy() {
 
   const toggleOnline = async () => {
     setToggling(true);
-    await API.post('/api/delivery-boys/toggle-online', {}, { headers: { Authorization: `Bearer ${token}` } });
+    setLocationError('');
+    const goingOnline = !(me?.is_online === 1);
+    let lat = null, lng = null;
+    if (goingOnline) {
+      try {
+        const pos = await getCurrentPosition();
+        lat = pos.lat;
+        lng = pos.lng;
+      } catch (e) {
+        setLocationError('Location access chahiye online hone ke liye — apne browser mein location permission "Allow" karo.');
+        setToggling(false);
+        return;
+      }
+    }
+    await API.post('/api/delivery-boys/toggle-online', { lat, lng }, { headers: { Authorization: `Bearer ${token}` } });
     await loadMe();
     setToggling(false);
   };
@@ -107,6 +154,10 @@ export default function DeliveryBoy() {
               {toggling ? '···' : isOnline ? 'Go Offline' : 'Go Online'}
             </button>
           </div>
+
+          {locationError ? (
+            <div style={s.locationErrorBox}>📍 {locationError}</div>
+          ) : null}
 
           {/* Stats Row */}
           <div style={s.statsGrid}>
@@ -224,6 +275,12 @@ export default function DeliveryBoy() {
                       <span style={s.detailIcon}>📍</span>
                       <span style={s.detailText}>{o.customer_address}</span>
                     </div>
+                    {o.delivery_distance_km ? (
+                      <div style={s.detailRow}>
+                        <span style={s.detailIcon}>🧭</span>
+                        <span style={s.detailText}>{parseFloat(o.delivery_distance_km).toFixed(1)} km away</span>
+                      </div>
+                    ) : null}
                   </div>
 
                   <div style={s.itemsBox}>
@@ -282,6 +339,8 @@ const s = {
   statusTitle: { fontSize: '15px', fontWeight: '700', color: 'white', marginBottom: '2px' },
   statusSub: { fontSize: '12px', color: 'rgba(255,255,255,0.8)' },
   statusToggle: { background: 'white', border: 'none', padding: '10px 18px', borderRadius: '10px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', color: '#111827' },
+
+  locationErrorBox: { background: '#fff3e0', color: '#e65100', borderRadius: '12px', padding: '12px 14px', fontSize: '13px', marginBottom: '16px', border: '1px solid #ffe0b2' },
 
   statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '16px' },
   statBox: { background: 'white', borderRadius: '14px', padding: '16px 8px', textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f0f0f2' },

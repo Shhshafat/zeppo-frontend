@@ -7,7 +7,7 @@ export default function Admin() {
   const [page, setPage] = useState('dashboard');
   const [data, setData] = useState({ orders: [], restaurants: [], users: [], applications: [], deliveryBoys: [], notifications: [], banners: [], coupons: [], analytics: {}, shifts: [] });
   const [unread, setUnread] = useState(0);
-  const [restForm, setRestForm] = useState({ name: '', category: '', emoji: '🍽️', address: '', description: '', image: '', commission_percent: 15, discount_percent: 0, free_delivery: 1, phone: '', min_order: 0, delivery_charge: 0, opening_time: '09:00', closing_time: '23:00' });
+  const [restForm, setRestForm] = useState({ name: '', category: '', emoji: '🍽️', address: '', description: '', image: '', commission_percent: 15, discount_percent: 0, free_delivery: 1, phone: '', min_order: 0, delivery_charge: 0, opening_time: '09:00', closing_time: '23:00', lat: '', lng: '', login_email: '', login_password: '' });
   const [menuForm, setMenuForm] = useState({ restaurant_id: '', category: '', name: '', price: '', original_price: '', description: '', image: '', is_veg: 1 });
   const [portions, setPortions] = useState([]);
   const [portionInput, setPortionInput] = useState({ name: '', price: '' });
@@ -51,6 +51,11 @@ export default function Admin() {
   const [tileForm, setTileForm] = useState({ label: '', icon: 'star', image: '', filter_type: 'none', filter_value: '', sort_order: 0 });
   const [editTile, setEditTile] = useState(null);
 
+  // Stays Tiles state
+  const [staysTiles, setStaysTiles] = useState([]);
+  const [stayTileForm, setStayTileForm] = useState({ label: '', icon: 'star', image: '', filter_type: 'none', filter_value: '', sort_order: 0 });
+  const [editStayTile, setEditStayTile] = useState(null);
+
   const restImgRef = useRef();
   const foodImgRef = useRef();
   const bannerFileRef = useRef();
@@ -59,6 +64,8 @@ export default function Admin() {
   const editStayImgRef = useRef();
   const tileImgRef = useRef();
   const editTileImgRef = useRef();
+  const stayTileImgRef = useRef();
+  const editStayTileImgRef = useRef();
 
   useEffect(() => { loadAll(); }, []);
   useEffect(() => { if (page === 'settlements') loadSettlements(); }, [page]);
@@ -66,10 +73,16 @@ export default function Admin() {
   useEffect(() => { if (page === 'appsettings') loadSettings(); }, [page]);
   useEffect(() => { if (page === 'stays') loadStays(); }, [page]);
   useEffect(() => { if (page === 'dineouttiles') loadTiles(); }, [page]);
+  useEffect(() => { if (page === 'staystiles') loadStaysTiles(); }, [page]);
 
   const loadTiles = async () => {
     const res = await API.get('/api/dineout-tiles/all');
     setDineoutTiles(res.data);
+  };
+
+  const loadStaysTiles = async () => {
+    const res = await API.get('/api/stays-tiles/all');
+    setStaysTiles(res.data);
   };
 
   const loadAll = async () => {
@@ -125,10 +138,12 @@ export default function Admin() {
     if (!restForm.name || !restForm.category || !restForm.address) { alert('Fill all fields!'); return; }
     let image = restForm.image;
     if (restImgRef.current?.files[0]) { const r = await uploadImage(restImgRef.current.files[0], 'restaurant'); image = r.url; }
-    await API.post('/api/restaurants/add', { ...restForm, image });
-    setRestForm({ name: '', category: '', emoji: '🍽️', address: '', description: '', image: '', commission_percent: 15, discount_percent: 0, free_delivery: 1, phone: '', min_order: 0, delivery_charge: 0, opening_time: '09:00', closing_time: '23:00' });
+    const res = await API.post('/api/restaurants/add', { ...restForm, image });
+    if (res.data.success === false) { alert(res.data.message || 'Error adding restaurant!'); return; }
+    const loginWasCreated = restForm.login_email;
+    setRestForm({ name: '', category: '', emoji: '🍽️', address: '', description: '', image: '', commission_percent: 15, discount_percent: 0, free_delivery: 1, phone: '', min_order: 0, delivery_charge: 0, opening_time: '09:00', closing_time: '23:00', lat: '', lng: '', login_email: '', login_password: '' });
     if (restImgRef.current) restImgRef.current.value = '';
-    alert('✅ Restaurant added!');
+    alert('✅ Restaurant added!' + (loginWasCreated ? ' Login credentials created — restaurant can sign in on the same login page.' : ''));
     loadAll();
   };
 
@@ -345,6 +360,36 @@ export default function Admin() {
 
   const ICON_OPTIONS = ['percent', 'award', 'coffee', 'trending-up', 'star', 'gift', 'heart', 'map-pin', 'tag', 'thumbs-up', 'clock', 'truck', 'zap'];
 
+  // ===== Stays Tiles handlers =====
+  const addStayTile = async () => {
+    if (!stayTileForm.label) { alert('Label zaroori hai!'); return; }
+    let image = stayTileForm.image;
+    if (stayTileImgRef.current?.files[0]) { const r = await uploadImage(stayTileImgRef.current.files[0], 'tile'); image = r.url; }
+    await API.post('/api/stays-tiles/add', { ...stayTileForm, image });
+    setStayTileForm({ label: '', icon: 'star', image: '', filter_type: 'none', filter_value: '', sort_order: 0 });
+    if (stayTileImgRef.current) stayTileImgRef.current.value = '';
+    alert('✅ Tile added!');
+    loadStaysTiles();
+  };
+  const updateStayTile = async () => {
+    let image = editStayTile.image;
+    if (editStayTileImgRef.current?.files[0]) { const r = await uploadImage(editStayTileImgRef.current.files[0], 'tile'); image = r.url; }
+    await API.post('/api/stays-tiles/update', { ...editStayTile, image });
+    setEditStayTile(null);
+    alert('✅ Tile updated!');
+    loadStaysTiles();
+  };
+  const deleteStayTile = async (id) => {
+    if (window.confirm('Delete this tile?')) {
+      await API.post('/api/stays-tiles/delete', { id });
+      loadStaysTiles();
+    }
+  };
+  const toggleStayTileActive = async (tile) => {
+    await API.post('/api/stays-tiles/update', { ...tile, is_active: tile.is_active ? 0 : 1 });
+    loadStaysTiles();
+  };
+
   const filteredBookings = stayBookings.filter(b => stayFilter === 'all' ? true : b.status === stayFilter);
 
   const pages = [
@@ -356,6 +401,7 @@ export default function Admin() {
     { key: 'settlements', icon: '💳', label: 'Settlements' },
     { key: 'stays', icon: '🏨', label: '🏨 Stays (Hotels/Rooms)' },
     { key: 'dineouttiles', icon: '🍽️', label: '🍽️ Dineout Features' },
+    { key: 'staystiles', icon: '🏨', label: '🏨 Stays Features' },
     { key: 'tickets', icon: '🎫', label: 'Support Tickets' },
     { key: 'applications', icon: '📝', label: 'Applications' },
     { key: 'banners', icon: '🎨', label: 'Banners' },
@@ -633,6 +679,8 @@ export default function Admin() {
                       </select>
                       <div><label style={s.uploadLabel}>Opening Time</label><input style={s.input} type="time" value={editRest.opening_time || '09:00'} onChange={e => setEditRest({ ...editRest, opening_time: e.target.value })} /></div>
                       <div><label style={s.uploadLabel}>Closing Time</label><input style={s.input} type="time" value={editRest.closing_time || '23:00'} onChange={e => setEditRest({ ...editRest, closing_time: e.target.value })} /></div>
+                      <input style={s.input} placeholder="Latitude" value={editRest.lat ?? ''} onChange={e => setEditRest({ ...editRest, lat: e.target.value })} />
+                      <input style={s.input} placeholder="Longitude" value={editRest.lng ?? ''} onChange={e => setEditRest({ ...editRest, lng: e.target.value })} />
                     </div>
                     <textarea style={s.textarea} placeholder="Description" value={editRest.description || ''} onChange={e => setEditRest({ ...editRest, description: e.target.value })} />
                     <label style={s.uploadLabel}>📷 Change Logo/Image:</label>
@@ -664,10 +712,24 @@ export default function Admin() {
                       <option value={0}>No</option>
                     </select>
                   </div>
+                  <input style={s.input} placeholder="Latitude (e.g. 34.5259)" value={restForm.lat} onChange={e => setRestForm({ ...restForm, lat: e.target.value })} />
+                  <input style={s.input} placeholder="Longitude (e.g. 74.2547)" value={restForm.lng} onChange={e => setRestForm({ ...restForm, lng: e.target.value })} />
                   <div><label style={s.uploadLabel}>Opening Time</label><input style={s.input} type="time" value={restForm.opening_time} onChange={e => setRestForm({ ...restForm, opening_time: e.target.value })} /></div>
                   <div><label style={s.uploadLabel}>Closing Time</label><input style={s.input} type="time" value={restForm.closing_time} onChange={e => setRestForm({ ...restForm, closing_time: e.target.value })} /></div>
                 </div>
                 <textarea style={s.textarea} placeholder="Description" value={restForm.description} onChange={e => setRestForm({ ...restForm, description: e.target.value })} />
+
+                <div style={{ fontSize: '12px', color: '#888', marginBottom: '15px', background: '#f0f7ff', padding: '10px 12px', borderRadius: '8px' }}>
+                  📍 <strong>How to get Latitude/Longitude:</strong> Open Google Maps, long-press the restaurant's exact location, tap the coordinates that pop up to copy them (e.g. "34.5259, 74.2547" — first number is Latitude, second is Longitude). This powers auto-assigning the nearest delivery boy and calculating accurate delivery fees.
+                </div>
+
+                <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: '15px', marginTop: '5px' }}>
+                  <label style={s.uploadLabel}>🔑 Restaurant Login (optional — lets them see &amp; confirm their own orders)</label>
+                  <div style={s.formGrid}>
+                    <input style={s.input} placeholder="Login Email" value={restForm.login_email} onChange={e => setRestForm({ ...restForm, login_email: e.target.value })} />
+                    <input style={s.input} placeholder="Login Password" type="password" value={restForm.login_password} onChange={e => setRestForm({ ...restForm, login_password: e.target.value })} />
+                  </div>
+                </div>
                 <label style={s.uploadLabel}>📷 Restaurant Logo/Image:</label>
                 <input type="file" ref={restImgRef} accept="image/*" style={s.fileInput} />
                 <button style={s.btnOrange} onClick={addRestaurant}>➕ Add Restaurant</button>
@@ -1061,6 +1123,106 @@ export default function Admin() {
                             <button style={s.btnConfirm} onClick={() => setEditTile(t)}>Edit</button>
                             <button style={{ ...s.btnConfirm, background: t.is_active ? '#f8d7da' : '#d1e7dd', color: t.is_active ? '#842029' : '#0a3622', marginLeft: '5px' }} onClick={() => toggleTileActive(t)}>{t.is_active ? 'Hide' : 'Show'}</button>
                             <button style={{ ...s.btnRed, marginLeft: '5px' }} onClick={() => deleteTile(t.id)}>Delete</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* STAYS FEATURES (Tiles) */}
+          {page === 'staystiles' && (
+            <div>
+              {editStayTile && (
+                <div style={s.modal}>
+                  <div style={s.modalBox}>
+                    <h3 style={s.modalTitle}>Edit Tile</h3>
+                    <label style={s.uploadLabel}>Label (use a line break for 2 lines)</label>
+                    <textarea style={s.textarea} value={editStayTile.label} onChange={e => setEditStayTile({ ...editStayTile, label: e.target.value })} />
+                    <label style={s.uploadLabel}>Icon</label>
+                    <select style={s.input} value={editStayTile.icon} onChange={e => setEditStayTile({ ...editStayTile, icon: e.target.value })}>
+                      {ICON_OPTIONS.map(ic => <option key={ic} value={ic}>{ic}</option>)}
+                    </select>
+                    <label style={s.uploadLabel}>What should tapping this tile filter by?</label>
+                    <select style={s.input} value={editStayTile.filter_type} onChange={e => setEditStayTile({ ...editStayTile, filter_type: e.target.value })}>
+                      <option value="none">Nothing (just decorative)</option>
+                      <option value="type">Stay type is... (Hotel, Apartment, etc.)</option>
+                      <option value="rating">Rating at least...</option>
+                      <option value="budget">Price per night at or below...</option>
+                      <option value="luxury">Price per night at or above...</option>
+                    </select>
+                    {editStayTile.filter_type !== 'none' && (
+                      <input style={s.input} placeholder={editStayTile.filter_type === 'rating' ? 'e.g. 4' : editStayTile.filter_type === 'type' ? 'e.g. Hotel' : 'e.g. 2000'} value={editStayTile.filter_value} onChange={e => setEditStayTile({ ...editStayTile, filter_value: e.target.value })} />
+                    )}
+                    <label style={s.uploadLabel}>Sort Order (lower shows first)</label>
+                    <input style={s.input} type="number" value={editStayTile.sort_order} onChange={e => setEditStayTile({ ...editStayTile, sort_order: e.target.value })} />
+                    <label style={s.uploadLabel}>📷 Tile Photo (optional)</label>
+                    <input type="file" ref={editStayTileImgRef} accept="image/*" style={s.fileInput} />
+                    {editStayTile.image && <img src={editStayTile.image} alt="" style={s.previewImg} />}
+                    <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                      <button style={s.btnGreen} onClick={updateStayTile}>Save Changes</button>
+                      <button style={s.btnRed} onClick={() => setEditStayTile(null)}>Cancel</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div style={s.formCard}>
+                <h3 style={s.tableTitle}>➕ Add Stays Hero Tile</h3>
+                <p style={{ fontSize: '12px', color: '#888', marginBottom: '15px' }}>
+                  Quick-shortcut tiles shown on the Stays tab (e.g. "Top Rated", "Budget Stays"). Add, edit, reorder, or remove anytime — no coding needed.
+                </p>
+                <label style={s.uploadLabel}>Label (use a line break for 2 lines, e.g. "Top\nRated")</label>
+                <textarea style={s.textarea} placeholder="Top&#10;Rated" value={stayTileForm.label} onChange={e => setStayTileForm({ ...stayTileForm, label: e.target.value })} />
+                <div style={s.formGrid}>
+                  <div>
+                    <label style={s.uploadLabel}>Icon</label>
+                    <select style={s.input} value={stayTileForm.icon} onChange={e => setStayTileForm({ ...stayTileForm, icon: e.target.value })}>
+                      {ICON_OPTIONS.map(ic => <option key={ic} value={ic}>{ic}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={s.uploadLabel}>Sort Order</label>
+                    <input style={s.input} type="number" placeholder="1, 2, 3..." value={stayTileForm.sort_order} onChange={e => setStayTileForm({ ...stayTileForm, sort_order: e.target.value })} />
+                  </div>
+                </div>
+                <label style={s.uploadLabel}>What should tapping this tile filter by?</label>
+                <select style={s.input} value={stayTileForm.filter_type} onChange={e => setStayTileForm({ ...stayTileForm, filter_type: e.target.value })}>
+                  <option value="none">Nothing (just decorative)</option>
+                  <option value="type">Stay type is... (Hotel, Apartment, etc.)</option>
+                  <option value="rating">Rating at least...</option>
+                  <option value="budget">Price per night at or below...</option>
+                  <option value="luxury">Price per night at or above...</option>
+                </select>
+                {stayTileForm.filter_type !== 'none' && (
+                  <input style={s.input} placeholder={stayTileForm.filter_type === 'rating' ? 'e.g. 4' : stayTileForm.filter_type === 'type' ? 'e.g. Hotel' : 'e.g. 2000'} value={stayTileForm.filter_value} onChange={e => setStayTileForm({ ...stayTileForm, filter_value: e.target.value })} />
+                )}
+                <label style={s.uploadLabel}>📷 Tile Photo (optional — if added, shows behind the icon instead of plain orange)</label>
+                <input type="file" ref={stayTileImgRef} accept="image/*" style={s.fileInput} />
+                <button style={s.btnOrange} onClick={addStayTile}>➕ Add Tile</button>
+              </div>
+
+              <div style={s.tableCard}>
+                <h3 style={s.tableTitle}>🏨 Current Stays Tiles</h3>
+                {staysTiles.length === 0 ? <p style={{ color: '#aaa', fontSize: '14px' }}>No tiles yet — add one above!</p> : (
+                  <table style={s.table}>
+                    <thead><tr>{['Photo', 'Order', 'Label', 'Icon', 'Filter', 'Status', 'Action'].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                    <tbody>
+                      {staysTiles.map(t => (
+                        <tr key={t.id}>
+                          <td style={s.td}>{t.image ? <img src={t.image} alt="" style={s.thumbImg} /> : <span style={{ fontSize: '20px', color: '#ccc' }}>—</span>}</td>
+                          <td style={s.td}>{t.sort_order}</td>
+                          <td style={s.td}><strong>{t.label.replace('\n', ' ')}</strong></td>
+                          <td style={s.td}><code>{t.icon}</code></td>
+                          <td style={s.td}>{t.filter_type === 'none' ? '—' : t.filter_type === 'rating' ? `Rating ≥ ${t.filter_value}` : t.filter_type === 'type' ? `Type: ${t.filter_value}` : t.filter_type === 'budget' ? `Price ≤ ₹${t.filter_value}` : `Price ≥ ₹${t.filter_value}`}</td>
+                          <td style={s.td}><span style={{ ...s.badge2, background: t.is_active ? '#d1e7dd' : '#f8d7da', color: t.is_active ? '#0a3622' : '#842029' }}>{t.is_active ? 'Active' : 'Hidden'}</span></td>
+                          <td style={s.td}>
+                            <button style={s.btnConfirm} onClick={() => setEditStayTile(t)}>Edit</button>
+                            <button style={{ ...s.btnConfirm, background: t.is_active ? '#f8d7da' : '#d1e7dd', color: t.is_active ? '#842029' : '#0a3622', marginLeft: '5px' }} onClick={() => toggleStayTileActive(t)}>{t.is_active ? 'Hide' : 'Show'}</button>
+                            <button style={{ ...s.btnRed, marginLeft: '5px' }} onClick={() => deleteStayTile(t.id)}>Delete</button>
                           </td>
                         </tr>
                       ))}
