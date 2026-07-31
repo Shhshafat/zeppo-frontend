@@ -96,11 +96,17 @@ export default function DeliveryBoy() {
     loadMe();
   };
 
+  const respondToOffer = async (id, accept) => {
+    await API.post('/api/delivery-boys/orders/respond', { order_id: id, accept }, { headers: { Authorization: `Bearer ${token}` } });
+    loadOrders();
+  };
+
   const logout = () => { localStorage.clear(); navigate('/login'); };
 
   const formatDate = (dt) => dt ? new Date(dt + 'Z').toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-';
 
-  const activeOrders = orders.filter(o => o.status !== 'delivered');
+  const activeOrders = orders.filter(o => o.status !== 'delivered' && o.delivery_accepted === 1);
+  const pendingOffers = orders.filter(o => o.status !== 'delivered' && o.delivery_accepted === null);
   const isOnline = me?.is_online === 1;
   const netBalance = me ? me.total_earned - (me.advance_taken || 0) - (me.paid_out || 0) : 0;
 
@@ -224,6 +230,37 @@ export default function DeliveryBoy() {
                 </>
               )}
             </div>
+          )}
+
+          {/* Order Offers — need Accept/Decline before they count as this delivery boy's job */}
+          {pendingOffers.length > 0 && (
+            <>
+              <div style={s.sectionTitle}>🔔 New Order Requests ({pendingOffers.length})</div>
+              {pendingOffers.map(o => {
+                let items = [];
+                try { items = JSON.parse(o.items); } catch (e) {}
+                return (
+                  <div key={o.id} style={s.offerCard}>
+                    <div style={s.offerBadge}>NEW REQUEST</div>
+                    <div style={s.restRow}>
+                      <span style={s.restIcon}>🍽️</span>
+                      <span style={s.restName}>{o.restaurant_name || 'Restaurant'}</span>
+                    </div>
+                    <div style={s.detailsBox}>
+                      <div style={s.detailRow}><span style={s.detailIcon}>📍</span><span style={s.detailText}>{o.customer_address}</span></div>
+                      {o.delivery_distance_km ? (
+                        <div style={s.detailRow}><span style={s.detailIcon}>🧭</span><span style={s.detailText}>{parseFloat(o.delivery_distance_km).toFixed(1)} km away</span></div>
+                      ) : null}
+                      <div style={s.detailRow}><span style={s.detailIcon}>💰</span><span style={s.detailText}>Earn ₹{me?.salary_per_delivery || 50} for this delivery</span></div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      <button style={{ ...s.actionBtn, background: '#dc2626', flex: 1 }} onClick={() => respondToOffer(o.id, false)}>✕ Decline</button>
+                      <button style={{ ...s.actionBtn, background: '#059669', flex: 1 }} onClick={() => respondToOffer(o.id, true)}>✓ Accept</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </>
           )}
 
           {/* Orders Section */}
@@ -369,6 +406,8 @@ const s = {
   emptyTitle: { fontSize: '16px', fontWeight: '700', color: '#374151', marginBottom: '5px' },
   emptyText: { fontSize: '13px', color: '#9ca3af' },
 
+  offerCard: { background: 'white', borderRadius: '16px', padding: '16px', marginBottom: '14px', border: '2px solid #ff6b00', boxShadow: '0 4px 16px rgba(255,107,0,0.15)', position: 'relative' },
+  offerBadge: { position: 'absolute', top: '-10px', left: '16px', background: '#ff6b00', color: 'white', fontSize: '10px', fontWeight: '800', padding: '3px 10px', borderRadius: '20px', letterSpacing: '0.5px' },
   orderCard: { background: 'white', borderRadius: '16px', padding: '16px', marginBottom: '14px', boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04)', border: '1px solid #f0f0f2' },
   orderCardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' },
   statusBadge: { fontSize: '11.5px', fontWeight: '700', padding: '5px 12px', borderRadius: '20px' },

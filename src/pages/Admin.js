@@ -737,7 +737,7 @@ export default function Admin() {
               <div style={s.tableCard}>
                 <h3 style={s.tableTitle}>🏪 All Restaurants</h3>
                 <table style={s.table}>
-                  <thead><tr>{['Image', 'Name', 'Category', 'Commission', 'Discount', 'Min Order', 'Rating', 'Status', 'Action'].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                  <thead><tr>{['Image', 'Name', 'Category', 'Commission', 'Discount', 'Min Order', 'Rating', 'Status', 'Verification', 'Action'].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
                   <tbody>
                     {data.restaurants.map(r => (
                       <tr key={r.id}>
@@ -747,6 +747,23 @@ export default function Admin() {
                         <td style={s.td}>{r.discount_percent > 0 ? <span style={{ color: '#e74c3c', fontWeight: '700' }}>{r.discount_percent}% OFF</span> : <span style={{ color: '#ccc' }}>—</span>}</td>
                         <td style={s.td}>₹{r.min_order || 0}</td><td style={s.td}>⭐ {r.rating}</td>
                         <td style={s.td}><span style={{ ...s.badge2, background: r.is_open ? '#d1e7dd' : '#f8d7da', color: r.is_open ? '#0a3622' : '#842029' }}>{r.is_open ? 'Open' : 'Closed'}</span></td>
+                        <td style={s.td}>
+                          <span style={{ ...s.badge2, ...(r.verification_status === 'verified' ? { background: '#d1e7dd', color: '#0a3622' } : r.verification_status === 'rejected' ? { background: '#f8d7da', color: '#842029' } : { background: '#fff3cd', color: '#856404' }) }}>
+                            {r.verification_status === 'verified' ? '✅ Verified' : r.verification_status === 'rejected' ? '⚠️ Rejected' : '⏳ Pending'}
+                          </span>
+                          {r.fssai_document && (
+                            <div style={{ marginTop: '6px' }}>
+                              <a href={r.fssai_document} target="_blank" rel="noopener noreferrer" style={{ fontSize: '11px', color: '#0d6efd' }}>View FSSAI Doc</a>
+                              {r.fssai_license && <div style={{ fontSize: '10.5px', color: '#888' }}>{r.fssai_license}</div>}
+                            </div>
+                          )}
+                          {r.fssai_document && r.verification_status !== 'verified' && (
+                            <div style={{ marginTop: '6px' }}>
+                              <button style={s.btnGreen} onClick={() => { API.post('/api/restaurants/verify', { id: r.id, verification_status: 'verified' }); loadAll(); }}>Verify</button>
+                              <button style={{ ...s.btnRed, marginLeft: '5px' }} onClick={() => { API.post('/api/restaurants/verify', { id: r.id, verification_status: 'rejected' }); loadAll(); }}>Reject</button>
+                            </div>
+                          )}
+                        </td>
                         <td style={s.td}>
                           <button style={s.btnConfirm} onClick={() => setEditRest(r)}>Edit</button>
                           <button style={{ ...s.btnConfirm, background: r.is_open ? '#f8d7da' : '#d1e7dd', color: r.is_open ? '#842029' : '#0a3622', marginLeft: '5px' }} onClick={() => toggleRestaurant(r.id, r.is_open)}>{r.is_open ? 'Close' : 'Open'}</button>
