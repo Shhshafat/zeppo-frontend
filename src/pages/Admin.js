@@ -1500,7 +1500,6 @@ export default function Admin() {
                 <input type="file" ref={staysBannerRef} accept="image/*,video/*" style={s.fileInput} />
                 <button style={s.btnOrange} onClick={() => uploadTopBanner('stays')}>⬆️ Upload / Replace</button>
               </div>
-              </div>
 
               <div style={s.formCard}>
                 <h3 style={s.tableTitle}>⚙️ General Settings</h3>
