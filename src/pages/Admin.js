@@ -7,7 +7,7 @@ export default function Admin() {
   const [page, setPage] = useState('dashboard');
   const [data, setData] = useState({ orders: [], restaurants: [], users: [], applications: [], deliveryBoys: [], notifications: [], banners: [], coupons: [], analytics: {}, shifts: [] });
   const [unread, setUnread] = useState(0);
-  const [restForm, setRestForm] = useState({ name: '', category: '', emoji: '🍽️', address: '', description: '', image: '', commission_percent: 15, discount_percent: 0, free_delivery: 1, phone: '', min_order: 0, delivery_charge: 0, opening_time: '09:00', closing_time: '23:00', lat: '', lng: '', login_email: '', login_password: '' });
+  const [restForm, setRestForm] = useState({ name: '', category: '', emoji: '🍽️', address: '', description: '', image: '', commission_percent: 15, discount_percent: 0, free_delivery: 1, phone: '', min_order: 0, delivery_charge: 0, opening_time: '09:00', closing_time: '23:00', lat: '', lng: '', login_email: '', login_password: '', dineout_image: '' });
   const [menuForm, setMenuForm] = useState({ restaurant_id: '', category: '', name: '', price: '', original_price: '', description: '', image: '', is_veg: 1 });
   const [portions, setPortions] = useState([]);
   const [portionInput, setPortionInput] = useState({ name: '', price: '' });
@@ -37,7 +37,7 @@ export default function Admin() {
 
   // App Settings state
   const [settings, setSettings] = useState({});
-  const [settingsForm, setSettingsForm] = useState({ top_banner_image: '', tagline: 'Ghar tak, jhatpat!', support_email: 'support@zeppo.in', support_phone: '', whatsapp_number: '', maintenance_mode: 'off', default_sound: 'muted' });
+  const [settingsForm, setSettingsForm] = useState({ top_banner_image: '', tagline: 'Ghar tak, jhatpat!', support_email: 'support@zeppo.in', support_phone: '', whatsapp_number: '', maintenance_mode: 'off', default_sound: 'muted', promo_popup_enabled: '0', promo_popup_title: '', promo_popup_text: '', promo_popup_button_text: '', promo_popup_link: '' });
 
   // Stays state
   const [stays, setStays] = useState([]);
@@ -57,9 +57,13 @@ export default function Admin() {
   const [editStayTile, setEditStayTile] = useState(null);
 
   const restImgRef = useRef();
+  const dineoutImgRef = useRef();
   const foodImgRef = useRef();
   const bannerFileRef = useRef();
   const topBannerRef = useRef();
+  const dineoutBannerRef = useRef();
+  const staysBannerRef = useRef();
+  const promoImgRef = useRef();
   const stayImgRef = useRef();
   const editStayImgRef = useRef();
   const tileImgRef = useRef();
@@ -138,11 +142,14 @@ export default function Admin() {
     if (!restForm.name || !restForm.category || !restForm.address) { alert('Fill all fields!'); return; }
     let image = restForm.image;
     if (restImgRef.current?.files[0]) { const r = await uploadImage(restImgRef.current.files[0], 'restaurant'); image = r.url; }
-    const res = await API.post('/api/restaurants/add', { ...restForm, image });
+    let dineout_image = restForm.dineout_image || '';
+    if (dineoutImgRef.current?.files[0]) { const r = await uploadImage(dineoutImgRef.current.files[0], 'restaurant'); dineout_image = r.url; }
+    const res = await API.post('/api/restaurants/add', { ...restForm, image, dineout_image });
     if (res.data.success === false) { alert(res.data.message || 'Error adding restaurant!'); return; }
     const loginWasCreated = restForm.login_email;
-    setRestForm({ name: '', category: '', emoji: '🍽️', address: '', description: '', image: '', commission_percent: 15, discount_percent: 0, free_delivery: 1, phone: '', min_order: 0, delivery_charge: 0, opening_time: '09:00', closing_time: '23:00', lat: '', lng: '', login_email: '', login_password: '' });
+    setRestForm({ name: '', category: '', emoji: '🍽️', address: '', description: '', image: '', commission_percent: 15, discount_percent: 0, free_delivery: 1, phone: '', min_order: 0, delivery_charge: 0, opening_time: '09:00', closing_time: '23:00', lat: '', lng: '', login_email: '', login_password: '', dineout_image: '' });
     if (restImgRef.current) restImgRef.current.value = '';
+    if (dineoutImgRef.current) dineoutImgRef.current.value = '';
     alert('✅ Restaurant added!' + (loginWasCreated ? ' Login credentials created — restaurant can sign in on the same login page.' : ''));
     loadAll();
   };
@@ -151,8 +158,11 @@ export default function Admin() {
     if (!editRest) return;
     let image = editRest.image;
     if (restImgRef.current?.files[0]) { const r = await uploadImage(restImgRef.current.files[0], 'restaurant'); image = r.url; }
-    await API.post('/api/restaurants/update', { ...editRest, image });
+    let dineout_image = editRest.dineout_image || '';
+    if (dineoutImgRef.current?.files[0]) { const r = await uploadImage(dineoutImgRef.current.files[0], 'restaurant'); dineout_image = r.url; }
+    await API.post('/api/restaurants/update', { ...editRest, image, dineout_image });
     setEditRest(null);
+    if (dineoutImgRef.current) dineoutImgRef.current.value = '';
     alert('✅ Restaurant updated!');
     loadAll();
   };
@@ -268,24 +278,35 @@ export default function Admin() {
   };
 
   const saveAllSettings = async () => {
-    for (const key of ['tagline', 'support_email', 'support_phone', 'whatsapp_number', 'maintenance_mode', 'default_sound']) {
-      await API.post('/api/settings', { key, value: settingsForm[key] || '' });
+    let promo_popup_image = settingsForm.promo_popup_image || '';
+    if (promoImgRef.current?.files[0]) {
+      const r = await uploadImage(promoImgRef.current.files[0], 'banner');
+      promo_popup_image = r.url;
     }
+    const toSave = { ...settingsForm, promo_popup_image };
+    for (const key of ['tagline', 'support_email', 'support_phone', 'whatsapp_number', 'maintenance_mode', 'default_sound', 'promo_popup_enabled', 'promo_popup_image', 'promo_popup_title', 'promo_popup_text', 'promo_popup_button_text', 'promo_popup_link']) {
+      await API.post('/api/settings', { key, value: toSave[key] || '' });
+    }
+    if (promoImgRef.current) promoImgRef.current.value = '';
     alert('✅ Settings saved!');
     loadSettings();
   };
 
-  const uploadTopBanner = async () => {
-    if (!topBannerRef.current?.files[0]) { alert('Photo ya video select karo!'); return; }
-    const r = await uploadImage(topBannerRef.current.files[0], 'banner');
-    await saveSetting('top_banner_image', r.url);
-    await saveSetting('top_banner_is_video', r.is_video ? '1' : '0');
-    if (topBannerRef.current) topBannerRef.current.value = '';
-    alert('✅ Top banner updated!');
+  const uploadTopBanner = async (suffix = '') => {
+    const ref = suffix === 'dineout' ? dineoutBannerRef : suffix === 'stays' ? staysBannerRef : topBannerRef;
+    if (!ref.current?.files[0]) { alert('Photo ya video select karo!'); return; }
+    const r = await uploadImage(ref.current.files[0], 'banner');
+    const key = suffix ? `top_banner_image_${suffix}` : 'top_banner_image';
+    const videoKey = suffix ? `top_banner_is_video_${suffix}` : 'top_banner_is_video';
+    await saveSetting(key, r.url);
+    await saveSetting(videoKey, r.is_video ? '1' : '0');
+    if (ref.current) ref.current.value = '';
+    alert('✅ Banner updated!');
   };
 
-  const removeTopBanner = async () => {
-    await saveSetting('top_banner_image', '');
+  const removeTopBanner = async (suffix = '') => {
+    const key = suffix ? `top_banner_image_${suffix}` : 'top_banner_image';
+    await saveSetting(key, '');
     alert('✅ Removed!');
   };
 
@@ -686,6 +707,11 @@ export default function Admin() {
                     <label style={s.uploadLabel}>📷 Change Logo/Image:</label>
                     <input type="file" ref={restImgRef} accept="image/*" style={s.fileInput} />
                     {editRest.image && <img src={editRest.image} alt="" style={s.previewImg} />}
+
+                    <label style={s.uploadLabel}>🍽️ Dineout Ambiance Photo (separate from logo):</label>
+                    <input type="file" ref={dineoutImgRef} accept="image/*" style={s.fileInput} />
+                    {editRest.dineout_image && <img src={editRest.dineout_image} alt="" style={s.previewImg} />}
+
                     <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
                       <button style={s.btnGreen} onClick={updateRestaurant}>Save Changes</button>
                       <button style={s.btnRed} onClick={() => setEditRest(null)}>Cancel</button>
@@ -730,8 +756,12 @@ export default function Admin() {
                     <input style={s.input} placeholder="Login Password" type="password" value={restForm.login_password} onChange={e => setRestForm({ ...restForm, login_password: e.target.value })} />
                   </div>
                 </div>
-                <label style={s.uploadLabel}>📷 Restaurant Logo/Image:</label>
+                <label style={s.uploadLabel}>📷 Restaurant Logo/Image (used in Home, Stores, Category listings):</label>
                 <input type="file" ref={restImgRef} accept="image/*" style={s.fileInput} />
+
+                <label style={s.uploadLabel}>🍽️ Dineout Ambiance Photo (optional — shown on the "Reserve a Table" card in Dineout tab; if left empty, the logo above is used instead)</label>
+                <input type="file" ref={dineoutImgRef} accept="image/*" style={s.fileInput} />
+
                 <button style={s.btnOrange} onClick={addRestaurant}>➕ Add Restaurant</button>
               </div>
               <div style={s.tableCard}>
@@ -1317,6 +1347,7 @@ export default function Admin() {
                       <option value="food">🍔 Food Tab</option>
                       <option value="dineout">🍽️ Dineout Tab</option>
                       <option value="stays">🏨 Stays Tab</option>
+                      <option value="stores">🏪 Stores Page</option>
                     </select>
                   </div>
                   <div>
@@ -1417,8 +1448,8 @@ export default function Admin() {
           {page === 'appsettings' && (
             <div>
               <div style={s.formCard}>
-                <h3 style={s.tableTitle}>🎨 Top Banner / Home Header Image</h3>
-                <p style={{ fontSize: '12px', color: '#888', marginBottom: '15px' }}>This shows at the very top of the Home page, above the Food/Dineout tabs. Leave empty to hide.</p>
+                <h3 style={s.tableTitle}>🍔 Food Tab — Header Banner</h3>
+                <p style={{ fontSize: '12px', color: '#888', marginBottom: '15px' }}>Shows at the top of the Food tab, above the search bar. Leave empty to hide.</p>
                 {settings.top_banner_image && (
                   <div style={{ marginBottom: '12px' }}>
                     {settings.top_banner_is_video === '1' ? (
@@ -1426,12 +1457,49 @@ export default function Admin() {
                     ) : (
                       <img src={settings.top_banner_image} alt="" style={{ width: '100%', maxWidth: '300px', borderRadius: '12px', display: 'block', marginBottom: '10px' }} />
                     )}
-                    <button style={s.btnRed} onClick={removeTopBanner}>Remove</button>
+                    <button style={s.btnRed} onClick={() => removeTopBanner()}>Remove</button>
                   </div>
                 )}
                 <label style={s.uploadLabel}>📷🎥 Upload Photo or Video (video can have sound):</label>
                 <input type="file" ref={topBannerRef} accept="image/*,video/*" style={s.fileInput} />
-                <button style={s.btnOrange} onClick={uploadTopBanner}>⬆️ Upload / Replace</button>
+                <button style={s.btnOrange} onClick={() => uploadTopBanner()}>⬆️ Upload / Replace</button>
+              </div>
+
+              <div style={s.formCard}>
+                <h3 style={s.tableTitle}>🍽️ Dineout Tab — Header Banner</h3>
+                <p style={{ fontSize: '12px', color: '#888', marginBottom: '15px' }}>Shows at the top of the Dineout tab. Leave empty and it'll use the Food tab's banner instead.</p>
+                {settings.top_banner_image_dineout && (
+                  <div style={{ marginBottom: '12px' }}>
+                    {settings.top_banner_is_video_dineout === '1' ? (
+                      <video src={settings.top_banner_image_dineout} controls muted style={{ width: '100%', maxWidth: '300px', borderRadius: '12px', display: 'block', marginBottom: '10px' }} />
+                    ) : (
+                      <img src={settings.top_banner_image_dineout} alt="" style={{ width: '100%', maxWidth: '300px', borderRadius: '12px', display: 'block', marginBottom: '10px' }} />
+                    )}
+                    <button style={s.btnRed} onClick={() => removeTopBanner('dineout')}>Remove</button>
+                  </div>
+                )}
+                <label style={s.uploadLabel}>📷🎥 Upload Photo or Video:</label>
+                <input type="file" ref={dineoutBannerRef} accept="image/*,video/*" style={s.fileInput} />
+                <button style={s.btnOrange} onClick={() => uploadTopBanner('dineout')}>⬆️ Upload / Replace</button>
+              </div>
+
+              <div style={s.formCard}>
+                <h3 style={s.tableTitle}>🏨 Stays Tab — Header Banner</h3>
+                <p style={{ fontSize: '12px', color: '#888', marginBottom: '15px' }}>Shows at the top of the Stays tab. Leave empty and it'll use the Food tab's banner instead.</p>
+                {settings.top_banner_image_stays && (
+                  <div style={{ marginBottom: '12px' }}>
+                    {settings.top_banner_is_video_stays === '1' ? (
+                      <video src={settings.top_banner_image_stays} controls muted style={{ width: '100%', maxWidth: '300px', borderRadius: '12px', display: 'block', marginBottom: '10px' }} />
+                    ) : (
+                      <img src={settings.top_banner_image_stays} alt="" style={{ width: '100%', maxWidth: '300px', borderRadius: '12px', display: 'block', marginBottom: '10px' }} />
+                    )}
+                    <button style={s.btnRed} onClick={() => removeTopBanner('stays')}>Remove</button>
+                  </div>
+                )}
+                <label style={s.uploadLabel}>📷🎥 Upload Photo or Video:</label>
+                <input type="file" ref={staysBannerRef} accept="image/*,video/*" style={s.fileInput} />
+                <button style={s.btnOrange} onClick={() => uploadTopBanner('stays')}>⬆️ Upload / Replace</button>
+              </div>
               </div>
 
               <div style={s.formCard}>
@@ -1458,6 +1526,38 @@ export default function Admin() {
                 </label>
 
                 <button style={s.btnOrange} onClick={saveAllSettings}>💾 Save All Settings</button>
+              </div>
+
+              <div style={s.formCard}>
+                <h3 style={s.tableTitle}>🎉 Promotional Popup</h3>
+                <p style={{ fontSize: '12px', color: '#888', marginBottom: '15px' }}>
+                  An optional popup shown once when someone opens the app (Food, Dineout, Stays, and Stores). Completely empty and off by default — fill in only what you want to say (a discount, a new item, anything). Leave it off and nothing will ever show.
+                </p>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '5px 0 15px', fontSize: '14px', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={settingsForm.promo_popup_enabled === '1'} onChange={e => setSettingsForm({ ...settingsForm, promo_popup_enabled: e.target.checked ? '1' : '0' })} />
+                  Enable popup
+                </label>
+
+                <label style={s.uploadLabel}>Title (optional)</label>
+                <input style={s.input} value={settingsForm.promo_popup_title} onChange={e => setSettingsForm({ ...settingsForm, promo_popup_title: e.target.value })} placeholder="e.g. Weekend Special!" />
+
+                <label style={s.uploadLabel}>Message (optional)</label>
+                <textarea style={s.textarea} value={settingsForm.promo_popup_text} onChange={e => setSettingsForm({ ...settingsForm, promo_popup_text: e.target.value })} placeholder="e.g. Flat 20% off on all Biryani orders today only!" />
+
+                <label style={s.uploadLabel}>Button Text (optional)</label>
+                <input style={s.input} value={settingsForm.promo_popup_button_text} onChange={e => setSettingsForm({ ...settingsForm, promo_popup_button_text: e.target.value })} placeholder="e.g. Order Now" />
+
+                <label style={s.uploadLabel}>Button Link (optional — e.g. /order/3, /stores)</label>
+                <input style={s.input} value={settingsForm.promo_popup_link} onChange={e => setSettingsForm({ ...settingsForm, promo_popup_link: e.target.value })} placeholder="/stores" />
+
+                <label style={s.uploadLabel}>📷 Image (optional)</label>
+                {settings.promo_popup_image && (
+                  <img src={settings.promo_popup_image} alt="" style={{ width: '100%', maxWidth: '260px', borderRadius: '10px', display: 'block', marginBottom: '10px' }} />
+                )}
+                <input type="file" ref={promoImgRef} accept="image/*" style={s.fileInput} />
+
+                <button style={s.btnOrange} onClick={saveAllSettings}>💾 Save Popup Settings</button>
               </div>
             </div>
           )}
