@@ -8,7 +8,7 @@ export default function Admin() {
   const [data, setData] = useState({ orders: [], restaurants: [], users: [], applications: [], deliveryBoys: [], notifications: [], banners: [], coupons: [], analytics: {}, shifts: [] });
   const [unread, setUnread] = useState(0);
   const [restForm, setRestForm] = useState({ name: '', category: '', emoji: '🍽️', address: '', description: '', image: '', commission_percent: 15, discount_percent: 0, free_delivery: 1, phone: '', min_order: 0, delivery_charge: 0, opening_time: '09:00', closing_time: '23:00', lat: '', lng: '', login_email: '', login_password: '', dineout_image: '' });
-  const [menuForm, setMenuForm] = useState({ restaurant_id: '', category: '', name: '', price: '', original_price: '', description: '', image: '', is_veg: 1 });
+  const [menuForm, setMenuForm] = useState({ restaurant_id: '', category: '', name: '', price: '', original_price: '', description: '', image: '', is_veg: 1, is_featured: 0 });
   const [portions, setPortions] = useState([]);
   const [portionInput, setPortionInput] = useState({ name: '', price: '' });
   const [dboyForm, setDboyForm] = useState({ name: '', phone: '', email: '', password: '', salary_per_delivery: 50 });
@@ -183,7 +183,7 @@ export default function Admin() {
     if (foodImgRef.current?.files[0]) { const r = await uploadImage(foodImgRef.current.files[0], 'food'); image = r.url; }
     const basePrice = portions.length > 0 ? portions[0].price : parseInt(menuForm.price);
     await API.post('/api/menu/add', { ...menuForm, price: basePrice, original_price: menuForm.original_price ? parseInt(menuForm.original_price) : null, portions: portions.length > 0 ? portions : null, image });
-    setMenuForm(f => ({ ...f, category: '', name: '', price: '', original_price: '', description: '', image: '', is_veg: 1 }));
+    setMenuForm(f => ({ ...f, category: '', name: '', price: '', original_price: '', description: '', image: '', is_veg: 1, is_featured: 0 }));
     setPortions([]);
     if (foodImgRef.current) foodImgRef.current.value = '';
     alert('✅ Item added!');
@@ -844,6 +844,10 @@ export default function Admin() {
                   <div onClick={() => setMenuForm({ ...menuForm, is_veg: 1 })} style={{ flex: 1, padding: '12px', borderRadius: '8px', textAlign: 'center', cursor: 'pointer', fontSize: '13px', fontWeight: '700', border: menuForm.is_veg === 1 ? '2px solid #27ae60' : '1px solid #e0e0e0', background: menuForm.is_veg === 1 ? '#e8f5e9' : 'white', color: menuForm.is_veg === 1 ? '#0a3622' : '#888' }}>🟢 Veg</div>
                   <div onClick={() => setMenuForm({ ...menuForm, is_veg: 0 })} style={{ flex: 1, padding: '12px', borderRadius: '8px', textAlign: 'center', cursor: 'pointer', fontSize: '13px', fontWeight: '700', border: menuForm.is_veg === 0 ? '2px solid #e74c3c' : '1px solid #e0e0e0', background: menuForm.is_veg === 0 ? '#fce4ec' : 'white', color: menuForm.is_veg === 0 ? '#842029' : '#888' }}>🔴 Non-Veg</div>
                 </div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '4px 0 12px', fontSize: '13px', cursor: 'pointer', background: menuForm.is_featured ? '#fff3e0' : '#fafafa', padding: '10px 12px', borderRadius: '8px', border: menuForm.is_featured ? '1.5px solid #ff6b00' : '1px solid #eee' }}>
+                  <input type="checkbox" checked={!!menuForm.is_featured} onChange={e => setMenuForm({ ...menuForm, is_featured: e.target.checked ? 1 : 0 })} />
+                  🔥 Show in "Trending Dishes" on Home page
+                </label>
                 <label style={s.uploadLabel}>🍽️ Food Photo:</label>
                 <input type="file" ref={foodImgRef} accept="image/*" style={s.fileInput} />
                 <button style={s.btnOrange} onClick={addMenuItem}>➕ Add Item</button>
@@ -1581,7 +1585,7 @@ function MenuTable({ restaurants, reload }) {
 
   const saveEdit = async () => {
     const basePrice = editPortions.length > 0 ? editPortions[0].price : parseInt(editItem.price);
-    await API.post('/api/menu/update', { id: editItem.id, name: editItem.name, price: basePrice, original_price: editItem.original_price || null, portions: editPortions.length > 0 ? editPortions : null, description: editItem.description, image: editItem.image, is_available: editItem.is_available });
+    await API.post('/api/menu/update', { id: editItem.id, name: editItem.name, price: basePrice, original_price: editItem.original_price || null, portions: editPortions.length > 0 ? editPortions : null, description: editItem.description, image: editItem.image, is_available: editItem.is_available, is_featured: editItem.is_featured });
     setEditItem(null);
     reload();
   };
@@ -1614,6 +1618,9 @@ function MenuTable({ restaurants, reload }) {
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '10px 0', fontSize: '14px' }}>
               <input type="checkbox" checked={editItem.is_available === 1} onChange={e => setEditItem({ ...editItem, is_available: e.target.checked ? 1 : 0 })} /> Available (uncheck for "Out of Stock")
             </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '10px 0', fontSize: '14px' }}>
+              <input type="checkbox" checked={editItem.is_featured === 1} onChange={e => setEditItem({ ...editItem, is_featured: e.target.checked ? 1 : 0 })} /> 🔥 Show in "Trending Dishes" on Home page
+            </label>
             <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
               <button style={s.btnGreen} onClick={saveEdit}>Save Changes</button>
               <button style={s.btnRed} onClick={() => setEditItem(null)}>Cancel</button>
@@ -1645,6 +1652,7 @@ function MenuTable({ restaurants, reload }) {
                       <td style={{ padding: '8px' }}>
                         <button style={s.btnConfirm} onClick={() => openEdit(item)}>Edit</button>
                         <button style={{ ...s.btnConfirm, marginLeft: '5px', background: item.is_available ? '#f8d7da' : '#d1e7dd', color: item.is_available ? '#842029' : '#0a3622' }} onClick={() => { API.post('/api/menu/toggle', { id: item.id, is_available: item.is_available ? 0 : 1 }); reloadMenu(); }}>{item.is_available ? 'Mark Out' : 'Mark In'}</button>
+                        <button style={{ ...s.btnConfirm, marginLeft: '5px', background: item.is_featured ? '#fff3e0' : '#f0f0f0', color: item.is_featured ? '#e65100' : '#666' }} onClick={() => { API.post('/api/menu/toggle-featured', { id: item.id, is_featured: item.is_featured ? 0 : 1 }); reloadMenu(); }}>{item.is_featured ? '🔥 Trending' : 'Mark Trending'}</button>
                         <button style={{ background: '#f8d7da', color: '#842029', border: 'none', padding: '5px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', marginLeft: '5px' }} onClick={() => { API.post('/api/menu/delete', { id: item.id }); reloadMenu(); }}>Delete</button>
                       </td>
                     </tr>
