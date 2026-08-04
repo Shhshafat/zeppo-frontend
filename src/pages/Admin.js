@@ -37,7 +37,7 @@ export default function Admin() {
 
   // App Settings state
   const [settings, setSettings] = useState({});
-  const [settingsForm, setSettingsForm] = useState({ top_banner_image: '', tagline: 'Ghar tak, jhatpat!', support_email: 'support@zeppo.in', support_phone: '', whatsapp_number: '', maintenance_mode: 'off', default_sound: 'muted', promo_popup_enabled: '0', promo_popup_title: '', promo_popup_text: '', promo_popup_button_text: '', promo_popup_link: '' });
+  const [settingsForm, setSettingsForm] = useState({ top_banner_image: '', tagline: 'Ghar tak, jhatpat!', support_email: 'support@zeppo.in', support_phone: '', whatsapp_number: '', maintenance_mode: 'off', default_sound: 'muted', promo_popup_enabled: '0', promo_popup_title: '', promo_popup_text: '', promo_popup_button_text: '', promo_popup_link: '', promo_popup_is_video: '0' });
 
   // Stays state
   const [stays, setStays] = useState([]);
@@ -262,7 +262,6 @@ export default function Admin() {
   const filteredTickets = tickets.filter(t => ticketFilter === 'all' ? true : t.status === ticketFilter);
 
   const addBanner = async () => {
-    if (!bannerForm.title) { alert('Title zaroori hai!'); return; }
     if (!bannerFileRef.current?.files[0]) { alert('Photo ya video upload karo!'); return; }
     const r = await uploadImage(bannerFileRef.current.files[0], 'banner');
     await API.post('/api/banners/add', { ...bannerForm, image: r.url, is_video: r.is_video });
@@ -279,12 +278,14 @@ export default function Admin() {
 
   const saveAllSettings = async () => {
     let promo_popup_image = settingsForm.promo_popup_image || '';
+    let promo_popup_is_video = settingsForm.promo_popup_is_video || '0';
     if (promoImgRef.current?.files[0]) {
       const r = await uploadImage(promoImgRef.current.files[0], 'banner');
       promo_popup_image = r.url;
+      promo_popup_is_video = r.is_video ? '1' : '0';
     }
-    const toSave = { ...settingsForm, promo_popup_image };
-    for (const key of ['tagline', 'support_email', 'support_phone', 'whatsapp_number', 'maintenance_mode', 'default_sound', 'promo_popup_enabled', 'promo_popup_image', 'promo_popup_title', 'promo_popup_text', 'promo_popup_button_text', 'promo_popup_link']) {
+    const toSave = { ...settingsForm, promo_popup_image, promo_popup_is_video };
+    for (const key of ['tagline', 'support_email', 'support_phone', 'whatsapp_number', 'maintenance_mode', 'default_sound', 'promo_popup_enabled', 'promo_popup_image', 'promo_popup_title', 'promo_popup_text', 'promo_popup_button_text', 'promo_popup_link', 'promo_popup_is_video']) {
       await API.post('/api/settings', { key, value: toSave[key] || '' });
     }
     if (promoImgRef.current) promoImgRef.current.value = '';
@@ -1554,11 +1555,15 @@ export default function Admin() {
                 <label style={s.uploadLabel}>Button Link (optional — e.g. /order/3, /stores)</label>
                 <input style={s.input} value={settingsForm.promo_popup_link} onChange={e => setSettingsForm({ ...settingsForm, promo_popup_link: e.target.value })} placeholder="/stores" />
 
-                <label style={s.uploadLabel}>📷 Image (optional)</label>
+                <label style={s.uploadLabel}>📷🎥 Photo or Video (optional — supports normal video or 3D/animated clips)</label>
                 {settings.promo_popup_image && (
-                  <img src={settings.promo_popup_image} alt="" style={{ width: '100%', maxWidth: '260px', borderRadius: '10px', display: 'block', marginBottom: '10px' }} />
+                  settings.promo_popup_is_video === '1' ? (
+                    <video src={settings.promo_popup_image} controls muted style={{ width: '100%', maxWidth: '260px', borderRadius: '10px', display: 'block', marginBottom: '10px' }} />
+                  ) : (
+                    <img src={settings.promo_popup_image} alt="" style={{ width: '100%', maxWidth: '260px', borderRadius: '10px', display: 'block', marginBottom: '10px' }} />
+                  )
                 )}
-                <input type="file" ref={promoImgRef} accept="image/*" style={s.fileInput} />
+                <input type="file" ref={promoImgRef} accept="image/*,video/*" style={s.fileInput} />
 
                 <button style={s.btnOrange} onClick={saveAllSettings}>💾 Save Popup Settings</button>
               </div>
