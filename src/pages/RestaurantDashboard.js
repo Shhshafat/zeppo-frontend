@@ -15,20 +15,36 @@ export default function RestaurantDashboard() {
   const prevPendingCount = useRef(null);
   const audioRef = useRef(null);
 
-  const [docForm, setDocForm] = useState({ owner_name: '', fssai_license: '', gst_number: '' });
+  const [docForm, setDocForm] = useState({ owner_name: '', fssai_license: '', gst_number: '', bank_account_number: '', bank_ifsc: '', bank_account_holder: '', aadhaar_number: '', pan_number: '' });
   const [savingDocs, setSavingDocs] = useState(false);
   const docFileRef = useRef();
+  const addressProofRef = useRef();
+  const idProofRef = useRef();
+
+  const [menu, setMenu] = useState([]);
+  const [menuForm, setMenuForm] = useState({ category: '', name: '', price: '', original_price: '', description: '', is_veg: 1 });
+  const [editingItem, setEditingItem] = useState(null);
+  const menuImgRef = useRef();
+  const [savingMenuItem, setSavingMenuItem] = useState(false);
+
+  const [reviews, setReviews] = useState([]);
+  const [rejectingOrder, setRejectingOrder] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
 
   useEffect(() => {
     if (!token) { navigate('/login'); return; }
-    Promise.all([loadOrders(), loadMe(), loadEarnings()]).finally(() => setLoading(false));
+    Promise.all([loadOrders(), loadMe(), loadEarnings(), loadMenu(), loadReviews()]).finally(() => setLoading(false));
     const interval = setInterval(() => { loadOrders(); }, 20000);
     audioRef.current = new (window.AudioContext || window.webkitAudioContext)();
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
-    if (me) setDocForm({ owner_name: me.owner_name || '', fssai_license: me.fssai_license || '', gst_number: me.gst_number || '' });
+    if (me) setDocForm({
+      owner_name: me.owner_name || '', fssai_license: me.fssai_license || '', gst_number: me.gst_number || '',
+      bank_account_number: me.bank_account_number || '', bank_ifsc: me.bank_ifsc || '', bank_account_holder: me.bank_account_holder || '',
+      aadhaar_number: me.aadhaar_number || '', pan_number: me.pan_number || '',
+    });
   }, [me]);
 
   const playAlertSound = () => {
@@ -70,6 +86,14 @@ export default function RestaurantDashboard() {
     const res = await API.get('/api/restaurant/earnings', { headers: { Authorization: `Bearer ${token}` } });
     setEarnings(res.data);
   };
+  const loadMenu = async () => {
+    const res = await API.get('/api/restaurant/menu', { headers: { Authorization: `Bearer ${token}` } });
+    setMenu(res.data);
+  };
+  const loadReviews = async () => {
+    const res = await API.get('/api/restaurant/reviews', { headers: { Authorization: `Bearer ${token}` } });
+    setReviews(res.data);
+  };
 
   const updateStatus = async (id, status) => {
     const res = await API.post('/api/restaurant/orders/status', { id, status }, { headers: { Authorization: `Bearer ${token}` } });
@@ -77,17 +101,93 @@ export default function RestaurantDashboard() {
     loadOrders();
   };
 
+  const confirmReject = async () => {
+    const res = await API.post('/api/restaurant/orders/status', { id: rejectingOrder.id, status: 'cancelled', reason: rejectReason }, { headers: { Authorization: `Bearer ${token}` } });
+    if (res.data.success === false) { alert(res.data.message || 'Could not reject order'); }
+    setRejectingOrder(null);
+    setRejectReason('');
+    loadOrders();
+  };
+
+  const saveMenuItem = async () => {
+    if (!menuForm.category || !menuForm.name || !menuForm.price) { alert('Please fill category, name and price!'); return; }
+    setSavingMenuItem(true);
+    try {
+      let image = editingItem?.image || '';
+      if (menuImgRef.current?.files[0]) {
+        const fd = new FormData();
+        fd.append('image', menuImgRef.current.files[0]);
+        const upRes = await API.post('/api/upload/food', fd, { headers: { Authorization: `Bearer ${token}` } });
+        if (upRes.data.success) image = upRes.data.url;
+      }
+      const payload = { ...menuForm, price: parseInt(menuForm.price), original_price: menuForm.original_price ? parseInt(menuForm.original_price) : null, image };
+      if (editingItem) {
+        await API.post('/api/restaurant/menu/update', { ...payload, id: editingItem.id, is_available: editingItem.is_available }, { headers: { Authorization: `Bearer ${token}` } });
+      } else {
+        await API.post('/api/restaurant/menu/add', payload, { headers: { Authorization: `Bearer ${token}` } });
+      }
+      setMenuForm({ category: '', name: '', price: '', original_price: '', description: '', is_veg: 1 });
+      setEditingItem(null);
+      if (menuImgRef.current) menuImgRef.current.value = '';
+      loadMenu();
+    } finally {
+      setSavingMenuItem(false);
+    }
+  };
+
+  const editMenuItem = (item) => {
+    setEditingItem(item);
+    setMenuForm({
+      category: item.category, name: item.name, price: String(item.price),
+      original_price: item.original_price ? String(item.original_price) : '', description: item.description || '', is_veg: item.is_veg,
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const cancelEditMenuItem = () => {
+    setEditingItem(null);
+    setMenuForm({ category: '', name: '', price: '', original_price: '', description: '', is_veg: 1 });
+  };
+
+  const toggleMenuItem = async (item) => {
+    await API.post('/api/restaurant/menu/toggle', { id: item.id, is_available: item.is_available ? 0 : 1 }, { headers: { Authorization: `Bearer ${token}` } });
+    loadMenu();
+  };
+
+  const deleteMenuItem = async (item) => {
+    if (!window.confirm(`Delete "${item.name}"? This can't be undone.`)) return;
+    await API.post('/api/restaurant/menu/delete', { id: item.id }, { headers: { Authorization: `Bearer ${token}` } });
+    loadMenu();
+  };
+
   const saveDocuments = async () => {
     setSavingDocs(true);
     let fssai_document = me?.fssai_document || '';
+    let address_proof_document = me?.address_proof_document || '';
+    let id_proof_document = me?.id_proof_document || '';
     if (docFileRef.current?.files[0]) {
       const fd = new FormData();
       fd.append('image', docFileRef.current.files[0]);
       const upRes = await API.post('/api/upload/document', fd, { headers: { Authorization: `Bearer ${token}` } });
       if (upRes.data.success) fssai_document = upRes.data.url;
     }
-    await API.post('/api/restaurant/documents', { ...docForm, fssai_document }, { headers: { Authorization: `Bearer ${token}` } });
+    if (addressProofRef.current?.files[0]) {
+      const fd = new FormData();
+      fd.append('image', addressProofRef.current.files[0]);
+      const upRes = await API.post('/api/upload/document', fd, { headers: { Authorization: `Bearer ${token}` } });
+      if (upRes.data.success) address_proof_document = upRes.data.url;
+    }
+    if (idProofRef.current?.files[0]) {
+      const fd = new FormData();
+      fd.append('image', idProofRef.current.files[0]);
+      const upRes = await API.post('/api/upload/document', fd, { headers: { Authorization: `Bearer ${token}` } });
+      if (upRes.data.success) id_proof_document = upRes.data.url;
+    }
+    await API.post('/api/restaurant/documents', { ...docForm, fssai_document, address_proof_document, id_proof_document }, { headers: { Authorization: `Bearer ${token}` } });
     setSavingDocs(false);
+    if (docFileRef.current) docFileRef.current.value = '';
+    if (addressProofRef.current) addressProofRef.current.value = '';
+    if (idProofRef.current) idProofRef.current.value = '';
     alert('✅ Details saved! Your documents are now pending review by ZEPPO.');
     loadMe();
   };
@@ -165,7 +265,9 @@ export default function RestaurantDashboard() {
       <div style={s.tabBar}>
         {[
           { key: 'orders', label: '📦 Orders' },
+          { key: 'menu', label: '🍲 Menu' },
           { key: 'earnings', label: '💰 Earnings' },
+          { key: 'reviews', label: '⭐ Reviews' },
           { key: 'profile', label: '🏪 Profile' },
         ].map(t => (
           <button key={t.key} style={{ ...s.tabBarBtn, ...(tab === t.key ? s.tabBarBtnActive : {}) }} onClick={() => setTab(t.key)}>
@@ -229,6 +331,17 @@ export default function RestaurantDashboard() {
                         <div style={s.detailRow}><span style={s.detailIcon}>💳</span><span style={s.detailText}>{o.payment_method === 'upi' ? 'UPI' : 'Cash on Delivery'}</span></div>
                       </div>
 
+                      {o.delivery_boy_name && (
+                        <div style={s.deliveryBox}>
+                          <span style={s.detailIcon}>🛵</span>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: '13px', fontWeight: '700', color: '#111827' }}>{o.delivery_boy_name}</div>
+                            <div style={{ fontSize: '11.5px', color: '#6b7280' }}>{o.delivery_boy_phone} · {o.delivery_boy_online ? '🟢 Online' : '⚪ Offline'}</div>
+                          </div>
+                          <a href={`tel:${o.delivery_boy_phone}`} style={s.phoneLink}>Call</a>
+                        </div>
+                      )}
+
                       <div style={s.itemsBox}>
                         {items.map((item, i) => (
                           <div key={i} style={s.itemRow}>
@@ -239,10 +352,16 @@ export default function RestaurantDashboard() {
                       </div>
 
                       {o.status === 'pending' && o.delivery_accepted === 1 && (
-                        <button style={{ ...s.actionBtn, background: '#3b82f6' }} onClick={() => updateStatus(o.id, 'confirmed')}>✅ Confirm Order</button>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                          <button style={{ ...s.actionBtn, background: '#3b82f6', flex: 2 }} onClick={() => updateStatus(o.id, 'confirmed')}>✅ Confirm</button>
+                          <button style={{ ...s.actionBtn, background: 'white', color: '#dc2626', border: '1.5px solid #fca5a5', flex: 1 }} onClick={() => setRejectingOrder(o)}>✕ Reject</button>
+                        </div>
                       )}
                       {o.status === 'pending' && o.delivery_accepted !== 1 && (
-                        <div style={s.waitingRiderNote}>🛵 Waiting for a delivery partner to accept — you'll be able to confirm once someone does.</div>
+                        <>
+                          <div style={s.waitingRiderNote}>🛵 Waiting for a delivery partner to accept — you'll be able to confirm once someone does.</div>
+                          <button style={{ ...s.actionBtn, background: 'white', color: '#dc2626', border: '1.5px solid #fca5a5', marginTop: '8px' }} onClick={() => setRejectingOrder(o)}>✕ Reject Order</button>
+                        </>
                       )}
                       {o.status === 'confirmed' && (
                         <button style={{ ...s.actionBtn, background: '#8b5cf6' }} onClick={() => updateStatus(o.id, 'preparing')}>👨‍🍳 Start Preparing</button>
@@ -255,6 +374,91 @@ export default function RestaurantDashboard() {
                 })}
               </div>
             )}
+          </>
+        )}
+
+        {tab === 'menu' && (
+          <>
+            <div style={s.profileCard}>
+              <div style={s.profileCardTitle}>{editingItem ? `✏️ Editing "${editingItem.name}"` : '➕ Add New Dish'}</div>
+              <div style={s.menuFormGrid}>
+                <div>
+                  <label style={s.formLabel}>Category *</label>
+                  <input style={s.formInput} placeholder="e.g. Starters, Main Course" value={menuForm.category} onChange={e => setMenuForm({ ...menuForm, category: e.target.value })} />
+                </div>
+                <div>
+                  <label style={s.formLabel}>Dish Name *</label>
+                  <input style={s.formInput} placeholder="e.g. Paneer Tikka" value={menuForm.name} onChange={e => setMenuForm({ ...menuForm, name: e.target.value })} />
+                </div>
+                <div>
+                  <label style={s.formLabel}>Price (₹) *</label>
+                  <input style={s.formInput} type="number" placeholder="180" value={menuForm.price} onChange={e => setMenuForm({ ...menuForm, price: e.target.value })} />
+                </div>
+                <div>
+                  <label style={s.formLabel}>Original Price (₹) — optional, for showing a discount</label>
+                  <input style={s.formInput} type="number" placeholder="220" value={menuForm.original_price} onChange={e => setMenuForm({ ...menuForm, original_price: e.target.value })} />
+                </div>
+              </div>
+              <label style={s.formLabel}>Description (optional)</label>
+              <input style={s.formInput} placeholder="Short description of the dish" value={menuForm.description} onChange={e => setMenuForm({ ...menuForm, description: e.target.value })} />
+
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '14px' }}>
+                <button type="button" onClick={() => setMenuForm({ ...menuForm, is_veg: 1 })} style={{ flex: 1, padding: '11px', borderRadius: '10px', textAlign: 'center', cursor: 'pointer', fontSize: '13px', fontWeight: '700', border: menuForm.is_veg === 1 ? '2px solid #27ae60' : '1.5px solid #e5e7eb', background: menuForm.is_veg === 1 ? '#ecfdf5' : 'white', color: menuForm.is_veg === 1 ? '#065f46' : '#6b7280' }}>🟢 Veg</button>
+                <button type="button" onClick={() => setMenuForm({ ...menuForm, is_veg: 0 })} style={{ flex: 1, padding: '11px', borderRadius: '10px', textAlign: 'center', cursor: 'pointer', fontSize: '13px', fontWeight: '700', border: menuForm.is_veg === 0 ? '2px solid #dc2626' : '1.5px solid #e5e7eb', background: menuForm.is_veg === 0 ? '#fef2f2' : 'white', color: menuForm.is_veg === 0 ? '#991b1b' : '#6b7280' }}>🔴 Non-Veg</button>
+              </div>
+
+              <label style={s.formLabel}>Dish Photo</label>
+              {editingItem?.image && <img src={editingItem.image} alt="" style={s.docPreview} />}
+              <input type="file" ref={menuImgRef} accept="image/*" style={{ marginBottom: '16px', fontSize: '13px' }} />
+
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button style={{ ...s.saveBtn, marginTop: 0 }} onClick={saveMenuItem} disabled={savingMenuItem}>
+                  {savingMenuItem ? 'Saving...' : editingItem ? '💾 Save Changes' : '➕ Add to Menu'}
+                </button>
+                {editingItem && (
+                  <button style={{ ...s.saveBtn, marginTop: 0, background: '#f3f4f6', color: '#374151' }} onClick={cancelEditMenuItem}>Cancel</button>
+                )}
+              </div>
+            </div>
+
+            <div style={{ marginTop: '20px' }}>
+              {menu.length === 0 ? (
+                <div style={s.emptyState}>
+                  <div style={s.emptyIcon}>🍽️</div>
+                  <div style={s.emptyTitle}>No dishes yet</div>
+                  <div style={s.emptyText}>Add your first dish using the form above</div>
+                </div>
+              ) : (
+                Object.entries(menu.reduce((acc, item) => { (acc[item.category] = acc[item.category] || []).push(item); return acc; }, {})).map(([category, items]) => (
+                  <div key={category} style={{ marginBottom: '22px' }}>
+                    <div style={s.menuCategoryTitle}>{category} ({items.length})</div>
+                    <div style={s.orderGrid}>
+                      {items.map(item => (
+                        <div key={item.id} style={{ ...s.orderCard, opacity: item.is_available ? 1 : 0.55 }}>
+                          {item.image && <img src={item.image} alt="" style={{ width: '100%', height: '120px', objectFit: 'cover', borderRadius: '10px', marginBottom: '10px' }} />}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span>{item.is_veg ? '🟢' : '🔴'}</span>
+                              <span style={{ fontSize: '14.5px', fontWeight: '700', color: '#111827' }}>{item.name}</span>
+                            </div>
+                            <span style={{ fontSize: '14px', fontWeight: '800', color: '#111827' }}>₹{item.price}</span>
+                          </div>
+                          {item.description ? <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '4px' }}>{item.description}</div> : null}
+                          {!item.is_available && <div style={{ fontSize: '11px', color: '#dc2626', fontWeight: '700', marginTop: '6px' }}>OUT OF STOCK</div>}
+                          <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                            <button style={s.smallActionBtn} onClick={() => editMenuItem(item)}>✏️ Edit</button>
+                            <button style={{ ...s.smallActionBtn, background: item.is_available ? '#fef2f2' : '#ecfdf5', color: item.is_available ? '#dc2626' : '#059669' }} onClick={() => toggleMenuItem(item)}>
+                              {item.is_available ? 'Mark Out' : 'Mark In'}
+                            </button>
+                            <button style={{ ...s.smallActionBtn, background: '#fef2f2', color: '#dc2626' }} onClick={() => deleteMenuItem(item)}>🗑️</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </>
         )}
 
@@ -300,6 +504,42 @@ export default function RestaurantDashboard() {
           </div>
         )}
 
+        {tab === 'reviews' && (
+          <>
+            <div style={s.statsGrid}>
+              <div style={s.statBox}>
+                <div style={s.statIcon}>⭐</div>
+                <div style={s.statValue}>{reviews.length > 0 ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1) : '-'}</div>
+                <div style={s.statLabel}>Average Rating</div>
+              </div>
+              <div style={s.statBox}><div style={s.statIcon}>📝</div><div style={s.statValue}>{reviews.length}</div><div style={s.statLabel}>Total Reviews</div></div>
+              <div style={s.statBox}><div style={s.statIcon}>👍</div><div style={s.statValue}>{reviews.filter(r => r.rating >= 4).length}</div><div style={s.statLabel}>4★ &amp; Above</div></div>
+              <div style={s.statBox}><div style={s.statIcon}>👎</div><div style={s.statValue}>{reviews.filter(r => r.rating <= 2).length}</div><div style={s.statLabel}>2★ &amp; Below</div></div>
+            </div>
+
+            {reviews.length === 0 ? (
+              <div style={s.emptyState}>
+                <div style={s.emptyIcon}>⭐</div>
+                <div style={s.emptyTitle}>No reviews yet</div>
+                <div style={s.emptyText}>Customer reviews will appear here after their orders are delivered</div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {reviews.map(r => (
+                  <div key={r.id} style={s.reviewCard}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ fontSize: '13.5px', fontWeight: '700', color: '#111827' }}>{r.customer_name || 'ZEPPO Customer'}</div>
+                      <div style={s.reviewStars}>{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</div>
+                    </div>
+                    {r.review ? <div style={{ fontSize: '13px', color: '#4b5563', marginTop: '8px', lineHeight: '19px' }}>{r.review}</div> : null}
+                    <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '8px' }}>{formatDate(r.created_at)}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
         {tab === 'profile' && me && (
           <div style={s.twoColRow}>
             <div style={s.profileCard}>
@@ -325,21 +565,74 @@ export default function RestaurantDashboard() {
               <label style={s.formLabel}>GST Number (optional)</label>
               <input style={s.formInput} placeholder="If registered" value={docForm.gst_number} onChange={e => setDocForm({ ...docForm, gst_number: e.target.value })} />
 
+              <label style={s.formLabel}>Aadhaar Number</label>
+              <input style={s.formInput} placeholder="12-digit Aadhaar number" value={docForm.aadhaar_number} onChange={e => setDocForm({ ...docForm, aadhaar_number: e.target.value })} />
+
+              <label style={s.formLabel}>PAN Number</label>
+              <input style={s.formInput} placeholder="10-character PAN" value={docForm.pan_number} onChange={e => setDocForm({ ...docForm, pan_number: e.target.value.toUpperCase() })} />
+
               <label style={s.formLabel}>Upload FSSAI Certificate / License Photo</label>
               {me.fssai_document && (
                 <img src={me.fssai_document} alt="FSSAI Document" style={s.docPreview} />
               )}
               <input type="file" ref={docFileRef} accept="image/*" style={{ marginBottom: '16px', fontSize: '13px' }} />
 
+              <label style={s.formLabel}>Upload Owner ID Proof (Aadhaar / PAN photo)</label>
+              {me.id_proof_document && (
+                <img src={me.id_proof_document} alt="ID Proof" style={s.docPreview} />
+              )}
+              <input type="file" ref={idProofRef} accept="image/*" style={{ marginBottom: '16px', fontSize: '13px' }} />
+
+              <label style={s.formLabel}>Upload Restaurant Address Proof</label>
+              {me.address_proof_document && (
+                <img src={me.address_proof_document} alt="Address Proof" style={s.docPreview} />
+              )}
+              <input type="file" ref={addressProofRef} accept="image/*" style={{ marginBottom: '16px', fontSize: '13px' }} />
+
               <button style={s.saveBtn} onClick={saveDocuments} disabled={savingDocs}>
                 {savingDocs ? 'Saving...' : '💾 Save & Submit for Review'}
               </button>
               <div style={s.profileNote}>Your restaurant needs a valid FSSAI license to legally sell food in India. ZEPPO reviews submissions within 24-48 hours.</div>
             </div>
+
+            <div style={s.profileCard}>
+              <div style={s.profileCardTitle}>🏦 Bank Details for Payments</div>
+              <div style={{ ...s.profileNote, marginBottom: '14px' }}>ZEPPO settles your weekly earnings directly to this account. Keep it up to date.</div>
+
+              <label style={s.formLabel}>Account Holder Name</label>
+              <input style={s.formInput} placeholder="As per bank records" value={docForm.bank_account_holder} onChange={e => setDocForm({ ...docForm, bank_account_holder: e.target.value })} />
+
+              <label style={s.formLabel}>Account Number</label>
+              <input style={s.formInput} placeholder="Bank account number" value={docForm.bank_account_number} onChange={e => setDocForm({ ...docForm, bank_account_number: e.target.value })} />
+
+              <label style={s.formLabel}>IFSC Code</label>
+              <input style={s.formInput} placeholder="e.g. SBIN0001234" value={docForm.bank_ifsc} onChange={e => setDocForm({ ...docForm, bank_ifsc: e.target.value.toUpperCase() })} />
+
+              <button style={s.saveBtn} onClick={saveDocuments} disabled={savingDocs}>
+                {savingDocs ? 'Saving...' : '💾 Save Bank Details'}
+              </button>
+            </div>
           </div>
         )}
 
       </div>
+
+      {rejectingOrder && (
+        <div style={s.modalOverlay} onClick={() => setRejectingOrder(null)}>
+          <div style={s.modalBox} onClick={e => e.stopPropagation()}>
+            <div style={s.profileCardTitle}>Reject Order #{rejectingOrder.id}?</div>
+            <div style={{ fontSize: '13px', color: '#6b7280', marginBottom: '14px' }}>
+              The customer will be notified that {rejectingOrder.restaurant_name || 'the restaurant'} couldn't take this order. This can't be undone.
+            </div>
+            <label style={s.formLabel}>Reason (optional, shown to ZEPPO support)</label>
+            <input style={s.formInput} placeholder="e.g. Out of stock, kitchen closed" value={rejectReason} onChange={e => setRejectReason(e.target.value)} />
+            <div style={{ display: 'flex', gap: '10px', marginTop: '6px' }}>
+              <button style={{ ...s.saveBtn, marginTop: 0, background: '#dc2626' }} onClick={confirmReject}>Reject Order</button>
+              <button style={{ ...s.saveBtn, marginTop: 0, background: '#f3f4f6', color: '#374151' }} onClick={() => setRejectingOrder(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -431,4 +724,16 @@ const s = {
   formInput: { width: '100%', padding: '11px 13px', border: '1.5px solid #e5e7eb', borderRadius: '10px', fontSize: '13.5px', marginBottom: '14px', boxSizing: 'border-box', outline: 'none' },
   docPreview: { width: '100%', maxWidth: '280px', borderRadius: '10px', marginBottom: '12px', display: 'block' },
   saveBtn: { width: '100%', background: '#ff6b00', color: 'white', border: 'none', padding: '13px', borderRadius: '12px', fontSize: '14px', fontWeight: '700', cursor: 'pointer', marginTop: '6px' },
+
+  deliveryBox: { display: 'flex', alignItems: 'center', gap: '10px', background: '#eff6ff', borderRadius: '10px', padding: '10px 12px', marginBottom: '10px' },
+
+  menuFormGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px', marginBottom: '0px' },
+  menuCategoryTitle: { fontSize: '14.5px', fontWeight: '800', color: '#111827', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.3px' },
+  smallActionBtn: { flex: 1, background: '#f3f4f6', color: '#374151', border: 'none', padding: '9px', borderRadius: '9px', fontSize: '12.5px', fontWeight: '700', cursor: 'pointer' },
+
+  reviewCard: { background: 'white', borderRadius: '14px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f0f0f2' },
+  reviewStars: { color: '#f59e0b', fontSize: '15px', letterSpacing: '1px' },
+
+  modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 500, padding: '20px' },
+  modalBox: { background: 'white', borderRadius: '18px', padding: '24px', width: '100%', maxWidth: '420px' },
 };
