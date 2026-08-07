@@ -82,6 +82,12 @@ export default function RestaurantDashboard() {
       Notification.requestPermission();
     }
   };
+  const toggleOpen = async () => {
+    const newVal = me?.is_open === 1 ? 0 : 1;
+    await API.post('/api/restaurant/toggle-open', { is_open: newVal }, { headers: { Authorization: `Bearer ${token}` } });
+    loadMe();
+  };
+
   const loadEarnings = async () => {
     const res = await API.get('/api/restaurant/earnings', { headers: { Authorization: `Bearer ${token}` } });
     setEarnings(res.data);
@@ -235,6 +241,15 @@ export default function RestaurantDashboard() {
             <div style={s.restNameSmall}>{me?.name}</div>
           </div>
           <div style={{ ...s.verifyBadge, color: vInfo.color, background: vInfo.bg }}>{vInfo.label}</div>
+          <button
+            onClick={toggleOpen}
+            style={{
+              marginLeft: '10px', border: 'none', borderRadius: '20px', padding: '7px 16px', fontSize: '12.5px', fontWeight: '700', cursor: 'pointer',
+              background: me?.is_open === 1 ? '#ecfdf5' : '#fef2f2', color: me?.is_open === 1 ? '#059669' : '#dc2626',
+            }}
+          >
+            {me?.is_open === 1 ? '🟢 Open — tap to close' : '🔴 Closed — tap to open'}
+          </button>
         </div>
         <div style={s.navRight}>
           <div style={s.notifWrap}>

@@ -15,6 +15,9 @@ import Stores from './pages/Stores';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import Cart from './pages/Cart';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import TermsOfService from './pages/TermsOfService';
+import RestaurantApply from './pages/RestaurantApply';
 
 export const ThemeContext = createContext();
 export const useTheme = () => useContext(ThemeContext);
@@ -24,7 +27,11 @@ export const useCart = () => useContext(CartContext);
 
 const PrivateRoute = ({ children }) => {
   const token = localStorage.getItem('token');
-  return token ? children : <Navigate to="/login" />;
+  const role = localStorage.getItem('role');
+  if (!token) return <Navigate to="/login" />;
+  if (role === 'delivery') return <Navigate to="/delivery" />;
+  if (role === 'restaurant') return <Navigate to="/restaurant-dashboard" />;
+  return children;
 };
 const AdminRoute = ({ children }) => {
   const token = localStorage.getItem('token');
@@ -35,6 +42,11 @@ const RestaurantRoute = ({ children }) => {
   const token = localStorage.getItem('token');
   const role = localStorage.getItem('role');
   return token && role === 'restaurant' ? children : <Navigate to="/login" />;
+};
+const DeliveryRoute = ({ children }) => {
+  const token = localStorage.getItem('token');
+  const role = localStorage.getItem('role');
+  return token && role === 'delivery' ? children : <Navigate to="/login" />;
 };
 
 function OfflineBanner() {
@@ -165,12 +177,15 @@ function App() {
               <Route path="/cart" element={<PrivateRoute><Cart /></PrivateRoute>} />
               <Route path="/track" element={<PrivateRoute><Track /></PrivateRoute>} />
               <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
-              <Route path="/delivery" element={<PrivateRoute><DeliveryBoy /></PrivateRoute>} />
+              <Route path="/delivery" element={<DeliveryRoute><DeliveryBoy /></DeliveryRoute>} />
               <Route path="/restaurant-dashboard" element={<RestaurantRoute><RestaurantDashboard /></RestaurantRoute>} />
               <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
               <Route path="/location" element={<PrivateRoute><Location /></PrivateRoute>} />
               <Route path="/delivery-signup" element={<DeliverySignup />} />
               <Route path="/stores" element={<PrivateRoute><Stores /></PrivateRoute>} />
+              <Route path="/privacy" element={<PrivacyPolicy />} />
+              <Route path="/terms" element={<TermsOfService />} />
+              <Route path="/partner" element={<RestaurantApply />} />
             </Routes>
           </Router>
         </div>

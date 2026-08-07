@@ -5,7 +5,7 @@ import API from '../api';
 export default function Admin() {
   const navigate = useNavigate();
   const [page, setPage] = useState('dashboard');
-  const [data, setData] = useState({ orders: [], restaurants: [], users: [], applications: [], deliveryBoys: [], notifications: [], banners: [], coupons: [], analytics: {}, shifts: [] });
+  const [data, setData] = useState({ orders: [], restaurants: [], users: [], applications: [], restaurantApplications: [], deliveryBoys: [], notifications: [], banners: [], coupons: [], analytics: {}, shifts: [] });
   const [unread, setUnread] = useState(0);
   const [restForm, setRestForm] = useState({ name: '', category: '', emoji: '🍽️', address: '', description: '', image: '', commission_percent: 15, discount_percent: 0, free_delivery: 1, phone: '', min_order: 0, delivery_charge: 0, opening_time: '09:00', closing_time: '23:00', lat: '', lng: '', login_email: '', login_password: '', dineout_image: '' });
   const [menuForm, setMenuForm] = useState({ restaurant_id: '', category: '', name: '', price: '', original_price: '', description: '', image: '', is_veg: 1, is_featured: 0 });
@@ -65,7 +65,15 @@ export default function Admin() {
   const staysBannerRef = useRef();
   const promoImgRef = useRef();
   const stayImgRef = useRef();
+  const stayVideoRef = useRef();
+  const [approvingApp, setApprovingApp] = useState(null);
+  const [approveForm, setApproveForm] = useState({ email: '', password: '', salary_per_delivery: '50' });
+  const [approving, setApproving] = useState(false);
+  const [approvingRestApp, setApprovingRestApp] = useState(null);
+  const [approveRestForm, setApproveRestForm] = useState({ email: '', password: '', commission_percent: '15' });
+  const [approvingRest, setApprovingRest] = useState(false);
   const editStayImgRef = useRef();
+  const editStayVideoRef = useRef();
   const tileImgRef = useRef();
   const editTileImgRef = useRef();
   const stayTileImgRef = useRef();
@@ -90,12 +98,12 @@ export default function Admin() {
   };
 
   const loadAll = async () => {
-    const [orders, rests, users, apps, dboys, notifs, banners, coupons, analytics, shifts] = await Promise.all([
-      API.get('/api/orders'), API.get('/api/restaurants'), API.get('/api/users'), API.get('/api/applications'),
+    const [orders, rests, users, apps, restApps, dboys, notifs, banners, coupons, analytics, shifts] = await Promise.all([
+      API.get('/api/orders'), API.get('/api/restaurants'), API.get('/api/users'), API.get('/api/applications'), API.get('/api/restaurant-applications'),
       API.get('/api/delivery-boys/stats'), API.get('/api/notifications'), API.get('/api/banners'),
       API.get('/api/coupons'), API.get('/api/analytics'), API.get('/api/delivery-boys/all-shifts'),
     ]);
-    setData({ orders: orders.data, restaurants: rests.data, users: users.data, applications: apps.data, deliveryBoys: dboys.data, notifications: notifs.data, banners: banners.data, coupons: coupons.data, analytics: analytics.data, shifts: shifts.data });
+    setData({ orders: orders.data, restaurants: rests.data, users: users.data, applications: apps.data, restaurantApplications: restApps.data, deliveryBoys: dboys.data, notifications: notifs.data, banners: banners.data, coupons: coupons.data, analytics: analytics.data, shifts: shifts.data });
     setUnread(notifs.data.filter(n => !n.is_read).length);
     if (rests.data.length > 0 && !menuForm.restaurant_id) setMenuForm(f => ({ ...f, restaurant_id: rests.data[0].id }));
   };
@@ -315,10 +323,20 @@ export default function Admin() {
   const addStay = async () => {
     if (!stayForm.name || !stayForm.price_per_night || !stayForm.address) { alert('Fill all required fields!'); return; }
     let images = [];
-    if (stayImgRef.current?.files[0]) { const r = await uploadImage(stayImgRef.current.files[0], 'stay'); images = [r.url]; }
-    await API.post('/api/stays/add', { ...stayForm, price_per_night: parseInt(stayForm.price_per_night), images });
+    const files = stayImgRef.current?.files ? Array.from(stayImgRef.current.files) : [];
+    for (const file of files) {
+      const r = await uploadImage(file, 'stay');
+      images.push(r.url);
+    }
+    let video = '';
+    if (stayVideoRef.current?.files[0]) {
+      const r = await uploadImage(stayVideoRef.current.files[0], 'stay');
+      video = r.url;
+    }
+    await API.post('/api/stays/add', { ...stayForm, price_per_night: parseInt(stayForm.price_per_night), images, video });
     setStayForm({ name: '', type: 'Hotel', price_per_night: '', address: '', phone: '', amenities: '', description: '' });
     if (stayImgRef.current) stayImgRef.current.value = '';
+    if (stayVideoRef.current) stayVideoRef.current.value = '';
     alert('✅ Stay added!');
     loadStays();
   };
@@ -331,8 +349,17 @@ export default function Admin() {
 
   const updateStay = async () => {
     let images = editStay.images || [];
-    if (editStayImgRef.current?.files[0]) { const r = await uploadImage(editStayImgRef.current.files[0], 'stay'); images = [r.url]; }
-    await API.post('/api/stays/update', { ...editStay, price_per_night: parseInt(editStay.price_per_night), images });
+    const files = editStayImgRef.current?.files ? Array.from(editStayImgRef.current.files) : [];
+    for (const file of files) {
+      const r = await uploadImage(file, 'stay');
+      images.push(r.url);
+    }
+    let video = editStay.video || '';
+    if (editStayVideoRef.current?.files[0]) {
+      const r = await uploadImage(editStayVideoRef.current.files[0], 'stay');
+      video = r.url;
+    }
+    await API.post('/api/stays/update', { ...editStay, price_per_night: parseInt(editStay.price_per_night), images, video });
     setEditStay(null);
     alert('✅ Stay updated!');
     loadStays();
@@ -383,6 +410,48 @@ export default function Admin() {
   const ICON_OPTIONS = ['percent', 'award', 'coffee', 'trending-up', 'star', 'gift', 'heart', 'map-pin', 'tag', 'thumbs-up', 'clock', 'truck', 'zap'];
 
   // ===== Stays Tiles handlers =====
+  const submitApproval = async () => {
+    if (!approveForm.email || !approveForm.password) { alert('Email aur password dono zaroori hain!'); return; }
+    setApproving(true);
+    try {
+      const res = await API.post('/api/application/approve', {
+        id: approvingApp.id, email: approveForm.email, password: approveForm.password,
+        salary_per_delivery: parseInt(approveForm.salary_per_delivery) || 50,
+      });
+      if (res.data.success) {
+        alert(`✅ Approved! ${approvingApp.full_name} ab in credentials se login kar sakta hai:\nEmail: ${approveForm.email}\nPassword: ${approveForm.password}`);
+        setApprovingApp(null);
+        setApproveForm({ email: '', password: '', salary_per_delivery: '50' });
+        loadAll();
+      } else {
+        alert(res.data.message || 'Approve nahi ho paya');
+      }
+    } finally {
+      setApproving(false);
+    }
+  };
+
+  const submitRestApproval = async () => {
+    if (!approveRestForm.email || !approveRestForm.password) { alert('Email aur password dono zaroori hain!'); return; }
+    setApprovingRest(true);
+    try {
+      const res = await API.post('/api/restaurant-applications/approve', {
+        id: approvingRestApp.id, email: approveRestForm.email, password: approveRestForm.password,
+        commission_percent: parseInt(approveRestForm.commission_percent) || 15,
+      });
+      if (res.data.success) {
+        alert(`✅ Approved! ${approvingRestApp.restaurant_name} ab in credentials se apne Restaurant Dashboard mein login kar sakta hai:\nEmail: ${approveRestForm.email}\nPassword: ${approveRestForm.password}`);
+        setApprovingRestApp(null);
+        setApproveRestForm({ email: '', password: '', commission_percent: '15' });
+        loadAll();
+      } else {
+        alert(res.data.message || 'Approve nahi ho paya');
+      }
+    } finally {
+      setApprovingRest(false);
+    }
+  };
+
   const addStayTile = async () => {
     if (!stayTileForm.label) { alert('Label zaroori hai!'); return; }
     let image = stayTileForm.image;
@@ -425,7 +494,8 @@ export default function Admin() {
     { key: 'dineouttiles', icon: '🍽️', label: '🍽️ Dineout Features' },
     { key: 'staystiles', icon: '🏨', label: '🏨 Stays Features' },
     { key: 'tickets', icon: '🎫', label: 'Support Tickets' },
-    { key: 'applications', icon: '📝', label: 'Applications' },
+    { key: 'applications', icon: '📝', label: 'Delivery Applications' },
+    { key: 'restaurant-applications', icon: '🍽️', label: 'Restaurant Applications' },
     { key: 'banners', icon: '🎨', label: 'Banners' },
     { key: 'coupons', icon: '🎟️', label: 'Coupons' },
     { key: 'users', icon: '👥', label: 'Users' },
@@ -587,9 +657,25 @@ export default function Admin() {
               <input style={s.input} placeholder="Owner Phone" value={editStay.phone || ''} onChange={e => setEditStay({ ...editStay, phone: e.target.value })} />
               <input style={s.input} placeholder="Amenities (comma separated)" value={editStay.amenities || ''} onChange={e => setEditStay({ ...editStay, amenities: e.target.value })} />
               <textarea style={s.textarea} placeholder="Description" value={editStay.description || ''} onChange={e => setEditStay({ ...editStay, description: e.target.value })} />
-              <label style={s.uploadLabel}>📷 Change Photo:</label>
-              <input type="file" ref={editStayImgRef} accept="image/*" style={s.fileInput} />
-              {editStay.images && editStay.images[0] && <img src={editStay.images[0]} alt="" style={s.previewImg} />}
+              <label style={s.uploadLabel}>📷 Current Photos (click ✕ to remove):</label>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                {(editStay.images || []).map((img, i) => (
+                  <div key={i} style={{ position: 'relative' }}>
+                    <img src={img} alt="" style={{ width: '70px', height: '70px', objectFit: 'cover', borderRadius: '8px' }} />
+                    <button
+                      onClick={() => setEditStay({ ...editStay, images: editStay.images.filter((_, idx) => idx !== i) })}
+                      style={{ position: 'absolute', top: '-6px', right: '-6px', width: '20px', height: '20px', borderRadius: '10px', background: '#dc2626', color: 'white', border: 'none', cursor: 'pointer', fontSize: '12px', lineHeight: '20px' }}
+                    >✕</button>
+                  </div>
+                ))}
+              </div>
+              <label style={s.uploadLabel}>📷 Add More Photos:</label>
+              <input type="file" ref={editStayImgRef} accept="image/*" multiple style={s.fileInput} />
+
+              <label style={s.uploadLabel}>🎥 Video (optional):</label>
+              {editStay.video && <video src={editStay.video} style={{ width: '160px', borderRadius: '8px', marginBottom: '8px', display: 'block' }} controls />}
+              <input type="file" ref={editStayVideoRef} accept="video/*" style={s.fileInput} />
+
               <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
                 <button style={s.btnGreen} onClick={updateStay}>Save Changes</button>
                 <button style={s.btnRed} onClick={() => setEditStay(null)}>Cancel</button>
@@ -1017,8 +1103,10 @@ export default function Admin() {
                   <input style={s.input} placeholder="Amenities (e.g. WiFi, AC, Parking)" value={stayForm.amenities} onChange={e => setStayForm({ ...stayForm, amenities: e.target.value })} />
                 </div>
                 <textarea style={s.textarea} placeholder="Description" value={stayForm.description} onChange={e => setStayForm({ ...stayForm, description: e.target.value })} />
-                <label style={s.uploadLabel}>📷 Photo:</label>
-                <input type="file" ref={stayImgRef} accept="image/*" style={s.fileInput} />
+                <label style={s.uploadLabel}>📷 Photos (select multiple — hold Ctrl/Cmd to pick more than one):</label>
+                <input type="file" ref={stayImgRef} accept="image/*" multiple style={s.fileInput} />
+                <label style={s.uploadLabel}>🎥 Video (optional — shown as the main preview if added):</label>
+                <input type="file" ref={stayVideoRef} accept="video/*" style={s.fileInput} />
                 <button style={s.btnOrange} onClick={addStay}>➕ Add Stay</button>
               </div>
 
@@ -1318,21 +1406,117 @@ export default function Admin() {
             <div style={s.tableCard}>
               <h3 style={s.tableTitle}>📝 Delivery Applications</h3>
               <table style={s.table}>
-                <thead><tr>{['Name', 'Father', 'Phone', 'Aadhar', 'Address', 'Bike', 'Status', 'Action'].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                <thead><tr>{['Name', 'Father', 'Phone', 'Aadhar', 'Address', 'Bike', 'Bank Details', 'Documents', 'Status', 'Action'].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
                 <tbody>
                   {data.applications.map(a => (
                     <tr key={a.id}>
                       <td style={s.td}>{a.full_name}</td><td style={s.td}>{a.father_name}</td><td style={s.td}>{a.phone}</td>
-                      <td style={s.td}>{a.aadhar}</td><td style={s.td}>{a.address}</td><td style={s.td}>{a.has_bike}</td>
+                      <td style={s.td}>{a.aadhar}</td><td style={s.td}>{a.address}</td><td style={s.td}>{a.has_bike === 'yes' ? a.bike_number : 'No bike'}</td>
+                      <td style={s.td}>
+                        {a.bank_account_number ? (
+                          <div style={{ fontSize: '11.5px' }}>{a.bank_account_holder}<br />{a.bank_account_number}<br />{a.bank_ifsc}</div>
+                        ) : <span style={{ color: '#aaa', fontSize: '12px' }}>—</span>}
+                      </td>
+                      <td style={s.td}>
+                        {a.id_proof_document ? <a href={a.id_proof_document} target="_blank" rel="noreferrer" style={{ ...s.docLink, marginRight: '8px' }}>🪪 ID Proof</a> : <span style={{ color: '#aaa', fontSize: '12px' }}>No ID</span>}
+                        {a.license_document ? <a href={a.license_document} target="_blank" rel="noreferrer" style={s.docLink}>🛵 License</a> : null}
+                      </td>
                       <td style={s.td}><span style={{ ...s.badge2, ...getBadge(a.status) }}>{a.status}</span></td>
                       <td style={s.td}>
-                        <button style={s.btnGreen} onClick={() => { API.post('/api/application/status', { id: a.id, status: 'approved' }); loadAll(); }}>✅</button>
-                        <button style={{ ...s.btnRed, marginLeft: '5px' }} onClick={() => { API.post('/api/application/status', { id: a.id, status: 'rejected' }); loadAll(); }}>❌</button>
+                        {a.status === 'pending' ? (
+                          <>
+                            <button style={s.btnGreen} onClick={() => setApprovingApp(a)}>✅ Approve</button>
+                            <button style={{ ...s.btnRed, marginLeft: '5px' }} onClick={() => { if (window.confirm(`Reject ${a.full_name}'s application?`)) { API.post('/api/application/status', { id: a.id, status: 'rejected' }); loadAll(); } }}>❌</button>
+                          </>
+                        ) : (
+                          <span style={{ fontSize: '12px', color: '#888' }}>{a.status === 'approved' ? '✅ Account created' : '—'}</span>
+                        )}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {approvingApp && (
+            <div style={s.modal}>
+              <div style={s.modalBox}>
+                <h3 style={s.modalTitle}>Approve {approvingApp.full_name}</h3>
+                <p style={{ fontSize: '13px', color: '#888', marginBottom: '14px' }}>
+                  Set login credentials for this delivery partner. Share these with them yourself (WhatsApp/call) — once created, they'll log in on the ZEPPO app and land straight on their delivery dashboard, nothing else.
+                </p>
+                <input style={s.input} placeholder="Email for login *" value={approveForm.email} onChange={e => setApproveForm({ ...approveForm, email: e.target.value })} />
+                <input style={s.input} placeholder="Password *" value={approveForm.password} onChange={e => setApproveForm({ ...approveForm, password: e.target.value })} />
+                <input style={s.input} placeholder="Salary per delivery (₹)" type="number" value={approveForm.salary_per_delivery} onChange={e => setApproveForm({ ...approveForm, salary_per_delivery: e.target.value })} />
+                <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
+                  <button style={s.btnGreen} onClick={submitApproval} disabled={approving}>{approving ? 'Creating...' : 'Create Account & Approve'}</button>
+                  <button style={s.btnRed} onClick={() => setApprovingApp(null)}>Cancel</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Restaurant Applications */}
+          {page === 'restaurant-applications' && (
+            <div style={s.tableCard}>
+              <h3 style={s.tableTitle}>🍽️ Restaurant Applications</h3>
+              <p style={{ fontSize: '12px', color: '#888', marginBottom: '15px' }}>
+                Share this link with restaurants who want to join: <b>{window.location.origin}/partner</b>
+              </p>
+              <table style={s.table}>
+                <thead><tr>{['Restaurant', 'Owner', 'Category', 'Phone', 'FSSAI', 'Bank Details', 'Documents', 'Status', 'Action'].map(h => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {data.restaurantApplications.map(a => (
+                    <tr key={a.id}>
+                      <td style={s.td}>{a.restaurant_name}</td><td style={s.td}>{a.owner_name}</td>
+                      <td style={s.td}>{a.category}</td><td style={s.td}>{a.phone}</td><td style={s.td}>{a.fssai_license}</td>
+                      <td style={s.td}>
+                        {a.bank_account_number ? (
+                          <div style={{ fontSize: '11.5px' }}>{a.bank_account_holder}<br />{a.bank_account_number}<br />{a.bank_ifsc}</div>
+                        ) : <span style={{ color: '#aaa', fontSize: '12px' }}>—</span>}
+                      </td>
+                      <td style={s.td}>
+                        {a.fssai_document ? <a href={a.fssai_document} target="_blank" rel="noreferrer" style={{ ...s.docLink, marginRight: '8px' }}>📄 FSSAI</a> : null}
+                        {a.id_proof_document ? <a href={a.id_proof_document} target="_blank" rel="noreferrer" style={{ ...s.docLink, marginRight: '8px' }}>🪪 ID</a> : null}
+                        {a.address_proof_document ? <a href={a.address_proof_document} target="_blank" rel="noreferrer" style={s.docLink}>🏠 Address</a> : null}
+                      </td>
+                      <td style={s.td}><span style={{ ...s.badge2, ...getBadge(a.status) }}>{a.status}</span></td>
+                      <td style={s.td}>
+                        {a.status === 'pending' ? (
+                          <>
+                            <button style={s.btnGreen} onClick={() => setApprovingRestApp(a)}>✅ Approve</button>
+                            <button style={{ ...s.btnRed, marginLeft: '5px' }} onClick={() => { if (window.confirm(`Reject ${a.restaurant_name}'s application?`)) { API.post('/api/restaurant-applications/status', { id: a.id, status: 'rejected' }); loadAll(); } }}>❌</button>
+                          </>
+                        ) : (
+                          <span style={{ fontSize: '12px', color: '#888' }}>{a.status === 'approved' ? '✅ Account created' : '—'}</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {data.restaurantApplications.length === 0 && (
+                    <tr><td colSpan={9} style={{ ...s.td, textAlign: 'center', color: '#aaa' }}>No applications yet</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {approvingRestApp && (
+            <div style={s.modal}>
+              <div style={s.modalBox}>
+                <h3 style={s.modalTitle}>Approve {approvingRestApp.restaurant_name}</h3>
+                <p style={{ fontSize: '13px', color: '#888', marginBottom: '14px' }}>
+                  Set login credentials for this restaurant. Share these with the owner yourself — once created, they'll log in and land straight on their Restaurant Dashboard.
+                </p>
+                <input style={s.input} placeholder="Email for login *" value={approveRestForm.email} onChange={e => setApproveRestForm({ ...approveRestForm, email: e.target.value })} />
+                <input style={s.input} placeholder="Password *" value={approveRestForm.password} onChange={e => setApproveRestForm({ ...approveRestForm, password: e.target.value })} />
+                <input style={s.input} placeholder="Commission %" type="number" value={approveRestForm.commission_percent} onChange={e => setApproveRestForm({ ...approveRestForm, commission_percent: e.target.value })} />
+                <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
+                  <button style={s.btnGreen} onClick={submitRestApproval} disabled={approvingRest}>{approvingRest ? 'Creating...' : 'Create Account & Approve'}</button>
+                  <button style={s.btnRed} onClick={() => setApprovingRestApp(null)}>Cancel</button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -1683,6 +1867,7 @@ function getBadge(status) {
 }
 
 const s = {
+  docLink: { color: '#3b82f6', fontSize: '12px', fontWeight: '600', textDecoration: 'underline' },
   container: { display: 'flex', minHeight: '100vh', background: '#f4f6f9' },
   sidebar: { width: '240px', background: '#1a1a2e', height: '100vh', position: 'fixed', left: 0, top: 0, zIndex: 100, overflowY: 'auto' },
   sidebarLogo: { padding: '20px', borderBottom: '1px solid #2d2d44' },
